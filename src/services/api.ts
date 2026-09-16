@@ -63,6 +63,12 @@ apiClient.interceptors.response.use(
   }
 );
 
+// Helper function to validate PostgreSQL UUID format
+export const isValidUUID = (id?: string | null): boolean => {
+  if (!id || typeof id !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim());
+};
+
 // Helper function to calculate Net Run Rate
 function computeNRR(
   runsScored: number,
@@ -290,6 +296,7 @@ export const cricketApi = {
 
   async createTournament(payload: CreateTournamentPayload): Promise<Tournament> {
     const code = generateCustomId(payload.name);
+    const createdByUuid = isValidUUID(payload.createdBy) ? payload.createdBy : null;
 
     try {
       const { data, error } = await supabase
@@ -315,14 +322,15 @@ export const cricketApi = {
             banner_url:
               payload.bannerUrl ||
               'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
-            created_by: payload.createdBy || null,
+            created_by: createdByUuid,
           },
         ])
         .select()
         .single();
 
       if (error) {
-        console.warn('Supabase createTournament error:', error.message);
+        console.error('Supabase createTournament error:', error.message);
+        throw new Error(`Database error: ${error.message}`);
       } else if (data) {
         const createdTour: Tournament = {
           id: data.id,
@@ -347,8 +355,11 @@ export const cricketApi = {
         statefulTournaments = [createdTour, ...statefulTournaments];
         return createdTour;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('createTournament error:', err);
+      if (err?.message?.includes('Database error')) {
+        throw err;
+      }
     }
 
     // Fallback in-memory
@@ -382,11 +393,13 @@ export const cricketApi = {
     tournamentId: string
   ): Promise<{ tournament: Tournament; teams: Team[]; matches: Match[]; standings: TournamentStanding[] }> {
     try {
-      const { data: tData } = await supabase
-        .from('tournaments')
-        .select('*')
-        .eq('id', tournamentId)
-        .maybeSingle();
+      let query = supabase.from('tournaments').select('*');
+      if (isValidUUID(tournamentId)) {
+        query = query.eq('id', tournamentId);
+      } else {
+        query = query.eq('code', tournamentId);
+      }
+      const { data: tData } = await query.maybeSingle();
 
       if (tData) {
         const tournament: Tournament = {
@@ -414,7 +427,7 @@ export const cricketApi = {
         const { data: standingsData } = await supabase
           .from('points_table')
           .select('id, matches, wins, losses, ties, points, nrr, recent_form, teams(id, name, short_name, logo_url)')
-          .eq('tournament_id', tournamentId)
+          .eq('tournament_id', tData.id)
           .order('points', { ascending: false })
           .order('nrr', { ascending: false });
 
