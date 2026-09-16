@@ -8,6 +8,11 @@
     "scheme": "criclivex",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -23,6 +28,7 @@
       "package": "com.shreedhar_t.CricLiveX"
     },
     "web": {
+      "bundler": "metro",
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
