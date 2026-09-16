@@ -933,30 +933,42 @@ export const cricketApi = {
 
   async getTeams(userId?: string): Promise<Team[]> {
     try {
-      let query = supabase.from('teams').select('*').order('created_at', { ascending: false });
+      let query = supabase
+        .from('teams')
+        .select('*, team_players(id)')
+        .order('created_at', { ascending: false });
       if (userId) {
         query = query.eq('created_by', userId);
       }
       const { data: dbTeams, error } = await query;
       if (!error && dbTeams && dbTeams.length > 0) {
-        const mapped: Team[] = dbTeams.map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          shortName: t.short_name || t.name.slice(0, 3).toUpperCase(),
-          code: generateCustomId(t.name),
-          logoUrl:
-            t.logo_url || 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=128&q=80',
-          city: t.city || '',
-          playersCount: 11,
-          matchesPlayed: 4,
-        }));
+        const mapped: Team[] = dbTeams.map((t: any) => {
+          const tpCount = Array.isArray(t.team_players) ? t.team_players.length : 0;
+          const memCount = statefulTeamPlayers[t.id]?.length || 0;
+          const actualCount = Math.max(tpCount, memCount);
+          return {
+            id: t.id,
+            name: t.name,
+            shortName: t.short_name || t.name.slice(0, 3).toUpperCase(),
+            code: generateCustomId(t.name),
+            logoUrl:
+              t.logo_url || 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=128&q=80',
+            city: t.city || '',
+            playersCount: actualCount,
+            matchesPlayed: 0,
+          };
+        });
         statefulTeams = mapped;
         return mapped;
       }
     } catch (err) {
       console.warn('getTeams error:', err);
     }
-    return statefulTeams;
+    // Update player counts in fallback state
+    return statefulTeams.map((t) => ({
+      ...t,
+      playersCount: Math.max(t.playersCount || 0, statefulTeamPlayers[t.id]?.length || 0),
+    }));
   },
 
   async createTeam(payload: CreateTeamPayload): Promise<Team> {
@@ -1136,7 +1148,7 @@ export const cricketApi = {
         .single();
 
       if (!error && data) {
-        return {
+        const createdPlayer: Player = {
           id: data.id,
           name: data.users?.name || data.name,
           shortName: payload.name.split(' ').map((w, i) => (i === 0 ? w[0] + '.' : w)).join(' '),
@@ -1169,6 +1181,17 @@ export const cricketApi = {
           },
           recentInnings: [],
         };
+
+        const currentPlayers = statefulTeamPlayers[teamId] || [];
+        statefulTeamPlayers[teamId] = [...currentPlayers.filter((p) => p.id !== createdPlayer.id), createdPlayer];
+
+        // Update statefulTeams playersCount
+        const tIdx = statefulTeams.findIndex((t) => t.id === teamId);
+        if (tIdx >= 0) {
+          statefulTeams[tIdx].playersCount = statefulTeamPlayers[teamId].length;
+        }
+
+        return createdPlayer;
       }
     } catch (err) {
       console.warn('addPlayerToTeam error:', err);
@@ -1209,6 +1232,13 @@ export const cricketApi = {
     };
     const currentPlayers = statefulTeamPlayers[teamId] || [];
     statefulTeamPlayers[teamId] = [...currentPlayers, newPlayer];
+
+    // Update statefulTeams playersCount
+    const tIdx = statefulTeams.findIndex((t) => t.id === teamId);
+    if (tIdx >= 0) {
+      statefulTeams[tIdx].playersCount = statefulTeamPlayers[teamId].length;
+    }
+
     return newPlayer;
   },
 
@@ -1220,6 +1250,11 @@ export const cricketApi = {
     }
     const current = statefulTeamPlayers[teamId] || [];
     statefulTeamPlayers[teamId] = current.filter((p) => p.id !== playerId);
+
+    const tIdx = statefulTeams.findIndex((t) => t.id === teamId);
+    if (tIdx >= 0) {
+      statefulTeams[tIdx].playersCount = statefulTeamPlayers[teamId].length;
+    }
   },
 
   // ==========================================

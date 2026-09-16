@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +28,8 @@ import {
   setShowWicketModal,
 } from '../store/scoringSlice';
 import { useAppDispatch, useAppSelector } from '../store/store';
-import { BallType, WicketType } from '../types/cricket';
+import { BallType, Player, WicketType } from '../types/cricket';
+import { oversToBalls } from '../utils/cricketRules';
 
 export const ScoringScreen: React.FC = () => {
   const router = useRouter();
@@ -46,6 +47,8 @@ export const ScoringScreen: React.FC = () => {
   const [showRetireModal, setShowRetireModal] = useState(false);
   const [showEndMatchModal, setShowEndMatchModal] = useState(false);
   const [customPlayerName, setCustomPlayerName] = useState('');
+  const [customBowlerName, setCustomBowlerName] = useState('');
+  const [bowlingSquad, setBowlingSquad] = useState<Player[]>([]);
   const [manOfTheMatchName, setManOfTheMatchName] = useState('');
   const [selectedWinnerId, setSelectedWinnerId] = useState<string>('');
 
@@ -82,6 +85,24 @@ export const ScoringScreen: React.FC = () => {
 
   const match = currentMatch;
 
+  const isTeam1Batting = match.battingTeamId === match.team1.id;
+  const battingTeam = isTeam1Batting ? match.team1 : match.team2;
+  const bowlingTeam = isTeam1Batting ? match.team2 : match.team1;
+  const activeBowlingTeamId = bowlingTeam.id;
+  const activeBowlingTeamName = bowlingTeam.name;
+
+  // Fetch current bowling team players
+  useEffect(() => {
+    if (activeBowlingTeamId) {
+      cricketApi
+        .getTeamById(activeBowlingTeamId)
+        .then((res) => {
+          setBowlingSquad(res.players || []);
+        })
+        .catch(() => setBowlingSquad([]));
+    }
+  }, [activeBowlingTeamId]);
+
   const handleScoreBall = (
     ballType: BallType,
     runs: number,
@@ -111,9 +132,35 @@ export const ScoringScreen: React.FC = () => {
           bowlerId: match.activeBowler.playerId,
         },
       })
-    ).finally(() => {
-      dispatch(setIsSubmitting(false));
-    });
+    )
+      .unwrap()
+      .then((result: any) => {
+        if (result?.match) {
+          const updated = result.match;
+          const activeBatting =
+            updated.battingTeamId === updated.team1.id ? updated.team1 : updated.team2;
+          const legalBalls = oversToBalls(activeBatting.overs);
+          const maxBalls = (activeBatting.maxOvers || 20) * 6;
+
+          // Once 6 legal balls bowled in the over, automatically show remaining players for change bowler
+          if (
+            legalBalls > 0 &&
+            legalBalls % 6 === 0 &&
+            legalBalls < maxBalls &&
+            updated.status === 'live'
+          ) {
+            setTimeout(() => {
+              dispatch(setShowBowlerModal(true));
+            }, 350);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('submitBallEvent error:', err);
+      })
+      .finally(() => {
+        dispatch(setIsSubmitting(false));
+      });
   };
 
   const handleUndo = () => {
@@ -227,14 +274,103 @@ export const ScoringScreen: React.FC = () => {
     }
   };
 
-  const bowlersList = [
-    { id: 'p_bumrah', name: 'J. Bumrah', figures: '3.2-0-28-2', econ: '8.40' },
-    { id: 'p_coetzee', name: 'G. Coetzee', figures: '4.0-0-42-0', econ: '10.50' },
-    { id: 'p_hardik', name: 'H. Pandya', figures: '4.0-0-35-0', econ: '8.75' },
-    { id: 'p_chawla', name: 'P. Chawla', figures: '4.0-0-26-1', econ: '6.50' },
-  ];
+  // Dynamic bowlers list from current bowling team squad + current innings bowling stats
+  const currentInningsBowling =
+    match.currentInnings === 2
+      ? (scorecard?.innings2?.bowling || [])
+      : (scorecard?.innings1?.bowling || []);
 
-  const handleSelectBowler = (b: typeof bowlersList[0]) => {
+  const bowlingPlayingXI =
+    isTeam1Batting ? (match.playingXI?.team2 || []) : (match.playingXI?.team1 || []);
+
+  const bowlersList = useMemo(() => {
+    const list: {
+      id: string;
+      name: string;
+      figures: string;
+      econ: string;
+      isCurrentBowler: boolean;
+    }[] = [];
+
+    // 1. Squad players of current bowling team
+    for (const p of bowlingSquad) {
+      const existing = currentInningsBowling.find(
+        (b) => b.playerId === p.id || b.name.toLowerCase() === p.name.toLowerCase()
+      );
+      const figures = existing
+        ? `${existing.overs.toFixed(1)}-${existing.maidens || 0}-${existing.runs}-${existing.wickets}`
+        : 'Yet to bowl';
+      const econ =
+        existing && existing.oversInBalls > 0
+          ? ((existing.runs / existing.oversInBalls) * 6).toFixed(2)
+          : (existing?.economy ? existing.economy.toFixed(2) : '0.00');
+
+      list.push({
+        id: p.id,
+        name: p.name,
+        figures,
+        econ,
+        isCurrentBowler:
+          match.activeBowler.playerId === p.id ||
+          match.activeBowler.name.toLowerCase() === p.name.toLowerCase(),
+      });
+    }
+
+    // 2. Playing XI players of bowling team
+    for (const p of bowlingPlayingXI) {
+      if (!list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+        const existing = currentInningsBowling.find(
+          (b) => b.playerId === p.id || b.name.toLowerCase() === p.name.toLowerCase()
+        );
+        const figures = existing
+          ? `${existing.overs.toFixed(1)}-${existing.maidens || 0}-${existing.runs}-${existing.wickets}`
+          : 'Yet to bowl';
+        const econ =
+          existing && existing.oversInBalls > 0
+            ? ((existing.runs / existing.oversInBalls) * 6).toFixed(2)
+            : '0.00';
+
+        list.push({
+          id: p.id,
+          name: p.name,
+          figures,
+          econ,
+          isCurrentBowler: match.activeBowler.name.toLowerCase() === p.name.toLowerCase(),
+        });
+      }
+    }
+
+    // 3. Any bowler who has bowled in this innings
+    for (const b of currentInningsBowling) {
+      if (!list.some((item) => item.id === b.playerId || item.name.toLowerCase() === b.name.toLowerCase())) {
+        list.push({
+          id: b.playerId,
+          name: b.name,
+          figures: `${b.overs.toFixed(1)}-${b.maidens || 0}-${b.runs}-${b.wickets}`,
+          econ: b.economy.toFixed(2),
+          isCurrentBowler: match.activeBowler.name.toLowerCase() === b.name.toLowerCase(),
+        });
+      }
+    }
+
+    // Fallback if no squad players registered yet
+    if (list.length === 0) {
+      const defaultNames = ['Bowler 1', 'Bowler 2', 'Bowler 3', 'Bowler 4'];
+      defaultNames.forEach((n, idx) => {
+        list.push({
+          id: `sample_bowler_${idx}`,
+          name: n,
+          figures: 'Yet to bowl',
+          econ: '0.00',
+          isCurrentBowler: idx === 0,
+        });
+      });
+    }
+
+    return list;
+  }, [bowlingSquad, bowlingPlayingXI, currentInningsBowling, match.activeBowler]);
+
+  const handleSelectBowler = (b: { id: string; name: string }) => {
     cricketApi.changeBowler(match.id, b.name, b.id).then((updated) => {
       dispatch({
         type: 'matches/handleRealtimeScoreUpdate',
@@ -244,8 +380,22 @@ export const ScoringScreen: React.FC = () => {
     });
   };
 
-  const isTeam1Batting = match.battingTeamId === match.team1.id;
-  const battingTeam = isTeam1Batting ? match.team1 : match.team2;
+  const handleAddCustomBowler = () => {
+    if (!customBowlerName.trim()) {
+      Alert.alert('Required', 'Please enter bowler name.');
+      return;
+    }
+    const newId = `bowler_${Date.now()}`;
+    cricketApi.changeBowler(match.id, customBowlerName.trim(), newId).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setCustomBowlerName('');
+      dispatch(setShowBowlerModal(false));
+    });
+  };
+
   const maxOvers = battingTeam.maxOvers || 20;
   const progressPercent = Math.min(100, Math.round((battingTeam.overs / maxOvers) * 100));
 
@@ -499,25 +649,59 @@ export const ScoringScreen: React.FC = () => {
         onRequestClose={() => dispatch(setShowBowlerModal(false))}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { maxHeight: '85%' }]}>
             <Text style={styles.modalTitle}>Change Active Bowler</Text>
-            <Text style={styles.modalSubtitle}>Select bowler for next over delivery:</Text>
+            <Text style={styles.modalSubtitle}>
+              {activeBowlingTeamName} Squad ({bowlersList.length} Available):
+            </Text>
 
-            {bowlersList.map((b) => (
-              <TouchableOpacity
-                key={b.id}
-                style={styles.bowlerOptionItem}
-                onPress={() => handleSelectBowler(b)}
-              >
-                <View>
-                  <Text style={styles.bowlerOptionName}>{b.name}</Text>
-                  <Text style={styles.bowlerOptionFigures}>
-                    {b.figures} • Econ {b.econ}
-                  </Text>
-                </View>
-                <Text style={styles.selectText}>Select</Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={true}>
+              {bowlersList.map((b) => (
+                <TouchableOpacity
+                  key={b.id}
+                  style={[
+                    styles.bowlerOptionItem,
+                    b.isCurrentBowler && { opacity: 0.6, borderColor: 'rgba(255, 185, 95, 0.4)' },
+                  ]}
+                  onPress={() => handleSelectBowler(b)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.bowlerOptionName}>{b.name}</Text>
+                      {b.isCurrentBowler && (
+                        <View style={{ backgroundColor: 'rgba(255, 185, 95, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#FFB95F' }}>Just Bowled</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.bowlerOptionFigures}>
+                      {b.figures} • Econ {b.econ}
+                    </Text>
+                  </View>
+                  <Text style={styles.selectText}>Select</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Custom Bowler Name Field */}
+            <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.1)', paddingTop: 10 }}>
+              <Text style={[styles.modalSubtitle, { marginBottom: 6 }]}>Or Add New Bowler:</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[styles.modalTextInput, { flex: 1 }]}
+                  placeholder="Enter bowler name"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                  value={customBowlerName}
+                  onChangeText={setCustomBowlerName}
+                />
+                <TouchableOpacity
+                  style={[styles.modalConfirmBtn, { paddingHorizontal: 16, backgroundColor: Colors.primary }]}
+                  onPress={handleAddCustomBowler}
+                >
+                  <Text style={styles.modalConfirmText}>Set</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             <TouchableOpacity
               style={[styles.modalCancelBtn, { marginTop: 12 }]}
