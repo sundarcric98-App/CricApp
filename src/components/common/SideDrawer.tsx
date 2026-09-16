@@ -31,6 +31,7 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({ visible, onClose }) => {
   };
 
   const menuItems = [
+    { label: 'Quick Match', icon: 'flash-outline', route: '/match/quick' },
     { label: 'Create Match', icon: 'add-circle-outline', route: '/match/create' },
     { label: 'Create Tournament', icon: 'trophy-outline', route: '/tournament/create' },
     { label: 'Create Team', icon: 'people-outline', route: '/team/create' },

@@ -103,12 +103,47 @@ export const HomeScreen: React.FC = () => {
           />
         }
       >
-        {/* Matches Section Header with Create Match Action */}
+        {/* Quick Match Hero Banner */}
+        <TouchableOpacity
+          style={styles.quickMatchBanner}
+          onPress={() => router.push('/match/quick' as any)}
+          activeOpacity={0.88}
+        >
+          <View style={styles.quickMatchBannerLeft}>
+            <View style={styles.quickMatchIconBox}>
+              <Ionicons name="flash" size={22} color="#F59E0B" />
+            </View>
+            <View style={styles.quickMatchBannerTextBox}>
+              <View style={styles.quickMatchTagRow}>
+                <Text style={styles.quickMatchTag}>⚡ QUICK MATCH</Text>
+                <Text style={styles.quickMatchTagSub}>• Instant Squads</Text>
+              </View>
+              <Text style={styles.quickMatchTitle}>Team A vs Team B</Text>
+              <Text style={styles.quickMatchSubtitle}>
+                Add teams, player names on the fly & start live scoring
+              </Text>
+            </View>
+          </View>
+          <View style={styles.quickMatchArrowBtn}>
+            <Ionicons name="chevron-forward" size={18} color="#0B0D13" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Matches Section Header with Quick Match & Create Match Action */}
         <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionTitleWithCount}>
             <Text style={styles.sectionTitle}>Matches</Text>
           </View>
           <View style={styles.headerActionsRow}>
+            <TouchableOpacity
+              style={styles.quickMatchActionBtn}
+              onPress={() => router.push('/match/quick' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="flash" size={13} color="#F59E0B" />
+              <Text style={styles.quickMatchActionText}>Quick Match</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.createActionBtn}
               onPress={() => router.push('/match/create' as any)}
@@ -468,10 +503,100 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 8,
   },
+  quickMatchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 14,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  quickMatchBannerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  quickMatchIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  quickMatchBannerTextBox: {
+    flex: 1,
+    gap: 2,
+  },
+  quickMatchTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  quickMatchTag: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#F59E0B',
+    letterSpacing: 0.8,
+  },
+  quickMatchTagSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  quickMatchTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  quickMatchSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94A3B8',
+    lineHeight: 14,
+  },
+  quickMatchArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
   headerActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+  },
+  quickMatchActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 4,
+  },
+  quickMatchActionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#D97706',
   },
   createActionBtn: {
     flexDirection: 'row',

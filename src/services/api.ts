@@ -2238,7 +2238,79 @@ export const cricketApi = {
       maxWickets,
       startTime: new Date().toISOString(),
       tournamentId: payload.tournamentId,
+      playingXI: {
+        team1: payload.team1PlayingXI || [],
+        team2: payload.team2PlayingXI || [],
+      },
     };
+
+    // If custom playing XI or squads were provided in payload, register them to statefulTeamPlayers
+    const team1Id = payload.teamAId || 'team_a';
+    const team2Id = payload.teamBId || 'team_b';
+
+    if (payload.team1PlayingXI && payload.team1PlayingXI.length > 0) {
+      statefulTeamPlayers[team1Id] = payload.team1PlayingXI.map((p) => ({
+        id: p.id || `p_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: p.name,
+        shortName: p.name.split(' ').map((w, i) => (i === 0 ? w[0] + '.' : w)).join(' '),
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+        teamId: team1Id,
+        role: p.role || 'batsman',
+        battingStyle: 'Right-hand bat',
+        bowlingStyle: p.role === 'bowler' ? 'Right-arm fast' : 'Right-arm medium',
+        isCaptain: p.isCaptain,
+        isWicketkeeper: p.isWicketkeeper,
+        careerStats: {
+          matches: 0,
+          innings: 0,
+          runs: 0,
+          average: 0,
+          strikeRate: 0,
+          highestScore: 0,
+          fifties: 0,
+          hundreds: 0,
+          wickets: 0,
+          overs: 0,
+          economy: 0,
+          bestBowling: '0/0',
+          catches: 0,
+          stumpings: 0,
+        },
+        recentInnings: [],
+      }));
+    }
+
+    if (payload.team2PlayingXI && payload.team2PlayingXI.length > 0) {
+      statefulTeamPlayers[team2Id] = payload.team2PlayingXI.map((p) => ({
+        id: p.id || `p_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: p.name,
+        shortName: p.name.split(' ').map((w, i) => (i === 0 ? w[0] + '.' : w)).join(' '),
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+        teamId: team2Id,
+        role: p.role || 'batsman',
+        battingStyle: 'Right-hand bat',
+        bowlingStyle: p.role === 'bowler' ? 'Right-arm fast' : 'Right-arm medium',
+        isCaptain: p.isCaptain,
+        isWicketkeeper: p.isWicketkeeper,
+        careerStats: {
+          matches: 0,
+          innings: 0,
+          runs: 0,
+          average: 0,
+          strikeRate: 0,
+          highestScore: 0,
+          fifties: 0,
+          hundreds: 0,
+          wickets: 0,
+          overs: 0,
+          economy: 0,
+          bestBowling: '0/0',
+          catches: 0,
+          stumpings: 0,
+        },
+        recentInnings: [],
+      }));
+    }
 
     const newScorecard: Scorecard = {
       matchId,
