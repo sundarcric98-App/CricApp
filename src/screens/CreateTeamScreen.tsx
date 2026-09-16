@@ -183,6 +183,15 @@ export const CreateTeamScreen: React.FC = () => {
               </Text>
             </View>
           </View>
+
+          {/* Squad Player Search Tip */}
+          <View style={styles.tipBanner}>
+            <Ionicons name="information-circle-outline" size={18} color="#D4AF37" />
+            <Text style={styles.tipBannerText}>
+              Once created, you can search and add players by their generated Player ID (e.g.{' '}
+              <Text style={{ color: Colors.primary, fontWeight: '700' }}>yuv123</Text>) in Team Details.
+            </Text>
+          </View>
         </View>
 
         {/* Action Button */}
@@ -337,6 +346,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.onSurface,
     marginTop: 2,
+  },
+  tipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
+    borderRadius: 10,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
+    marginTop: 14,
+  },
+  tipBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 16,
   },
   createButton: {
     marginTop: 24,

@@ -26,9 +26,12 @@ DROP TABLE IF EXISTS users CASCADE;
 -- 1. USERS TABLE
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    mobile TEXT UNIQUE NOT NULL,
+    username TEXT UNIQUE,
+    email TEXT UNIQUE,
     name TEXT NOT NULL,
-    pin_hash TEXT NOT NULL,
+    password_hash TEXT,
+    pin_hash TEXT,
+    mobile TEXT,
     user_code TEXT UNIQUE NOT NULL,
     profile_image TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -247,6 +250,8 @@ CREATE TABLE match_comments (
 -- ==============================================================================
 -- INDEXES FOR HIGH-PERFORMANCE QUERYING
 -- ==============================================================================
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_mobile ON users(mobile);
 CREATE INDEX IF NOT EXISTS idx_users_user_code ON users(user_code);
 CREATE INDEX IF NOT EXISTS idx_player_stats_user_id ON player_stats(user_id);

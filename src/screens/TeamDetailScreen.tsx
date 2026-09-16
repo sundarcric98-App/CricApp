@@ -22,7 +22,7 @@ import Header from '../components/common/Header';
 import MatchCard from '../components/match/MatchCard';
 import Colors from '../constants/colors';
 import cricketApi from '../services/api';
-import { Match, Player, PlayerRole, Team } from '../types/cricket';
+import { Match, Player, PlayerRole, Team, User } from '../types/cricket';
 
 const PLAYER_ROLES: { label: string; value: PlayerRole; icon: string }[] = [
   { label: 'Batsman', value: 'batsman', icon: 'baseball-outline' },
@@ -57,6 +57,15 @@ export const TeamDetailScreen: React.FC = () => {
 
   // Add Player Modal State
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
+  const [modalMode, setModalMode] = useState<'search' | 'manual'>('search');
+
+  // Search by Player ID / Code State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [addingUserId, setAddingUserId] = useState<string | null>(null);
+
+  // Manual Form State
   const [playerName, setPlayerName] = useState('');
   const [playerRole, setPlayerRole] = useState<PlayerRole>('batsman');
   const [battingStyle, setBattingStyle] = useState('Right-hand bat');
@@ -90,7 +99,65 @@ export const TeamDetailScreen: React.FC = () => {
     loadTeamData();
   };
 
-  const handleAddPlayer = async () => {
+  // Search players by Player ID (e.g. yuv123) or Username
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (!text || text.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const results = await cricketApi.searchPlayerByCode(text.trim());
+      setSearchResults(results);
+    } catch (err) {
+      console.warn('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Add searched player directly to squad
+  const handleAddSearchedPlayer = async (user: User) => {
+    if (!teamId) return;
+
+    // Check if player already in squad
+    const alreadyExists = players.some(
+      (p) =>
+        (p.userId && p.userId === user.id) ||
+        (p.userCode && p.userCode.toLowerCase() === user.userCode.toLowerCase())
+    );
+    if (alreadyExists) {
+      Alert.alert('Already in Squad', `${user.name} (${user.userCode}) is already in this team.`);
+      return;
+    }
+
+    setAddingUserId(user.id);
+    try {
+      await cricketApi.addPlayerToTeam(teamId, {
+        name: user.name,
+        role: 'allrounder',
+        battingStyle: 'Right-hand bat',
+        bowlingStyle: 'Right-arm medium',
+        userId: user.id,
+        userCode: user.userCode,
+      });
+
+      Alert.alert(
+        'Player Added!',
+        `${user.name} (${user.userCode}) has been successfully added to the squad.`
+      );
+      loadTeamData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to add player');
+    } finally {
+      setAddingUserId(null);
+    }
+  };
+
+  // Manual player add handler
+  const handleManualAddPlayer = async () => {
     if (!playerName.trim()) {
       Alert.alert('Required', 'Please enter player name.');
       return;
@@ -168,7 +235,10 @@ export const TeamDetailScreen: React.FC = () => {
         rightAction={
           <TouchableOpacity
             style={styles.headerPlusBtn}
-            onPress={() => setShowAddPlayerModal(true)}
+            onPress={() => {
+              setModalMode('search');
+              setShowAddPlayerModal(true);
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name="person-add-outline" size={20} color={Colors.onSurface} />
@@ -242,34 +312,42 @@ export const TeamDetailScreen: React.FC = () => {
           ))}
         </View>
 
-        {/* Tab 1: Squad / Players */}
+        {/* ============================================================== */}
+        {/* TAB 1: SQUAD / PLAYERS */}
+        {/* ============================================================== */}
         {activeTab === 'Squad' && (
           <View style={styles.tabContent}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Registered Players</Text>
+              <Text style={styles.sectionTitle}>Registered Squad</Text>
               <TouchableOpacity
                 style={styles.addPlayerBtn}
-                onPress={() => setShowAddPlayerModal(true)}
+                onPress={() => {
+                  setModalMode('search');
+                  setShowAddPlayerModal(true);
+                }}
                 activeOpacity={0.8}
               >
-                <Ionicons name="add" size={16} color="#FFFFFF" />
-                <Text style={styles.addPlayerBtnText}>Add Player</Text>
+                <Ionicons name="search" size={14} color="#0F1117" />
+                <Text style={styles.addPlayerBtnText}>Find by Player ID</Text>
               </TouchableOpacity>
             </View>
 
             {players.length === 0 ? (
               <View style={styles.emptySquadCard}>
-                <Ionicons name="people-outline" size={42} color="#00695C" />
+                <Ionicons name="people-outline" size={42} color={Colors.primary} />
                 <Text style={styles.emptySquadTitle}>No Players in Squad</Text>
                 <Text style={styles.emptySquadText}>
-                  Add batsmen, bowlers, and all-rounders to form the starting XI and bench.
+                  Search players by their generated Player ID (e.g. yuv123) or add manually.
                 </Text>
                 <TouchableOpacity
                   style={styles.emptyAddBtn}
-                  onPress={() => setShowAddPlayerModal(true)}
+                  onPress={() => {
+                    setModalMode('search');
+                    setShowAddPlayerModal(true);
+                  }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.emptyAddBtnText}>+ Add First Player</Text>
+                  <Text style={styles.emptyAddBtnText}>+ Search Player by ID</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -291,6 +369,11 @@ export const TeamDetailScreen: React.FC = () => {
                       <Text style={styles.playerName} numberOfLines={1}>
                         {player.name}
                       </Text>
+                      {player.userCode ? (
+                        <View style={styles.playerCodeBadge}>
+                          <Text style={styles.playerCodeBadgeText}>{player.userCode}</Text>
+                        </View>
+                      ) : null}
                       <View style={styles.roleTag}>
                         <Text style={styles.roleTagText}>{player.role}</Text>
                       </View>
@@ -313,7 +396,9 @@ export const TeamDetailScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Tab 2: Matches */}
+        {/* ============================================================== */}
+        {/* TAB 2: MATCHES */}
+        {/* ============================================================== */}
         {activeTab === 'Matches' && (
           <View style={styles.tabContent}>
             <View style={styles.sectionHeaderRow}>
@@ -323,14 +408,14 @@ export const TeamDetailScreen: React.FC = () => {
                 onPress={() => router.push('/match/create' as any)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="add" size={16} color="#FFFFFF" />
+                <Ionicons name="add" size={16} color="#0F1117" />
                 <Text style={styles.addPlayerBtnText}>Create Match</Text>
               </TouchableOpacity>
             </View>
 
             {matches.length === 0 ? (
               <View style={styles.emptySquadCard}>
-                <Ionicons name="baseball-outline" size={42} color="#00695C" />
+                <Ionicons name="baseball-outline" size={42} color={Colors.primary} />
                 <Text style={styles.emptySquadTitle}>No Matches Scheduled</Text>
                 <Text style={styles.emptySquadText}>
                   Create a match with this team to start tracking live scores.
@@ -348,7 +433,9 @@ export const TeamDetailScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Tab 3: Stats */}
+        {/* ============================================================== */}
+        {/* TAB 3: STATS */}
+        {/* ============================================================== */}
         {activeTab === 'Stats' && (
           <View style={styles.statsCard}>
             <Text style={styles.statsTitle}>Team Information</Text>
@@ -376,7 +463,9 @@ export const TeamDetailScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Modal: Add Player to Team */}
+      {/* ============================================================== */}
+      {/* MODAL: ADD PLAYER VIA PLAYER ID SEARCH OR MANUAL ENTRY */}
+      {/* ============================================================== */}
       <Modal
         visible={showAddPlayerModal}
         transparent
@@ -388,138 +477,285 @@ export const TeamDetailScreen: React.FC = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Player to Squad</Text>
               <TouchableOpacity onPress={() => setShowAddPlayerModal(false)}>
-                <Ionicons name="close" size={24} color="#0F172A" />
+                <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-              <View style={styles.modalForm}>
-                {/* Player Name */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Player Full Name *</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. Virat Kohli"
-                    placeholderTextColor="#94A3B8"
-                    value={playerName}
-                    onChangeText={setPlayerName}
-                  />
-                </View>
+            {/* Modal Segment Switcher (Search Player ID vs Manual) */}
+            <View style={styles.modalSegment}>
+              <TouchableOpacity
+                style={[styles.modalSegmentBtn, modalMode === 'search' && styles.modalSegmentBtnActive]}
+                onPress={() => setModalMode('search')}
+              >
+                <Ionicons
+                  name="search"
+                  size={14}
+                  color={modalMode === 'search' ? '#0F1117' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.modalSegmentText,
+                    modalMode === 'search' && styles.modalSegmentTextActive,
+                  ]}
+                >
+                  Search by Player ID
+                </Text>
+              </TouchableOpacity>
 
-                {/* Jersey Number */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Jersey Number (Optional)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="e.g. 18"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="number-pad"
-                    value={jerseyNumber}
-                    onChangeText={setJerseyNumber}
-                  />
-                </View>
+              <TouchableOpacity
+                style={[styles.modalSegmentBtn, modalMode === 'manual' && styles.modalSegmentBtnActive]}
+                onPress={() => setModalMode('manual')}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={14}
+                  color={modalMode === 'manual' ? '#0F1117' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.modalSegmentText,
+                    modalMode === 'manual' && styles.modalSegmentTextActive,
+                  ]}
+                >
+                  Manual Entry
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-                {/* Role Selector */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Player Role *</Text>
-                  <View style={styles.roleGrid}>
-                    {PLAYER_ROLES.map((r) => (
-                      <TouchableOpacity
-                        key={r.value}
-                        style={[
-                          styles.roleButton,
-                          playerRole === r.value && styles.roleButtonActive,
-                        ]}
-                        onPress={() => setPlayerRole(r.value)}
-                      >
-                        <Ionicons
-                          name={r.icon as any}
-                          size={16}
-                          color={playerRole === r.value ? '#FFFFFF' : '#0F172A'}
-                        />
-                        <Text
-                          style={[
-                            styles.roleButtonText,
-                            playerRole === r.value && styles.roleButtonTextActive,
-                          ]}
-                        >
-                          {r.label}
-                        </Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              {/* SUBTAB 1: SEARCH BY PLAYER ID */}
+              {modalMode === 'search' && (
+                <View style={styles.searchSection}>
+                  <Text style={styles.searchLabel}>
+                    Search by Player ID (e.g.{' '}
+                    <Text style={{ color: Colors.primary, fontWeight: '700' }}>yuv123</Text>) or Name
+                  </Text>
+
+                  <View style={styles.searchInputBox}>
+                    <Ionicons name="search" size={18} color="#94A3B8" />
+                    <TextInput
+                      style={styles.modalSearchInput}
+                      placeholder="e.g. yuv123 or yuvi..."
+                      placeholderTextColor="#64748B"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={searchQuery}
+                      onChangeText={handleSearch}
+                    />
+                    {searchQuery.length > 0 && (
+                      <TouchableOpacity onPress={() => handleSearch('')}>
+                        <Ionicons name="close-circle" size={18} color="#94A3B8" />
                       </TouchableOpacity>
-                    ))}
+                    )}
                   </View>
-                </View>
 
-                {/* Batting Style */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Batting Style</Text>
-                  <View style={styles.choiceRow}>
-                    {BATTING_STYLES.map((bs) => (
-                      <TouchableOpacity
-                        key={bs}
-                        style={[
-                          styles.choiceBtn,
-                          battingStyle === bs && styles.choiceBtnActive,
-                        ]}
-                        onPress={() => setBattingStyle(bs)}
-                      >
-                        <Text
-                          style={[
-                            styles.choiceBtnText,
-                            battingStyle === bs && styles.choiceBtnTextActive,
-                          ]}
-                        >
-                          {bs}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
+                  {searching && (
+                    <View style={styles.searchLoaderRow}>
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                      <Text style={styles.searchLoaderText}>Searching player database...</Text>
+                    </View>
+                  )}
 
-                {/* Bowling Style */}
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Bowling Style</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
-                    {BOWLING_STYLES.map((bw) => (
-                      <TouchableOpacity
-                        key={bw}
-                        style={[
-                          styles.choiceBtn,
-                          bowlingStyle === bw && styles.choiceBtnActive,
-                        ]}
-                        onPress={() => setBowlingStyle(bw)}
-                      >
-                        <Text
-                          style={[
-                            styles.choiceBtnText,
-                            bowlingStyle === bw && styles.choiceBtnTextActive,
-                          ]}
-                        >
-                          {bw}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-            </ScrollView>
+                  {/* Search Results List */}
+                  {!searching && searchResults.length > 0 && (
+                    <View style={styles.resultsList}>
+                      <Text style={styles.resultsCountText}>
+                        Found {searchResults.length} player(s):
+                      </Text>
+                      {searchResults.map((user) => {
+                        const isAdded = players.some(
+                          (p) =>
+                            p.userId === user.id ||
+                            (p.userCode && p.userCode.toLowerCase() === user.userCode.toLowerCase())
+                        );
+                        return (
+                          <View key={user.id} style={styles.resultItemCard}>
+                            <View style={styles.resultAvatarBox}>
+                              <Text style={styles.resultAvatarInitial}>
+                                {user.name.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
 
-            {/* Save Button */}
-            <TouchableOpacity
-              style={styles.savePlayerBtn}
-              onPress={handleAddPlayer}
-              disabled={submittingPlayer}
-              activeOpacity={0.85}
-            >
-              {submittingPlayer ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.savePlayerBtnText}>ADD TO SQUAD</Text>
+                            <View style={styles.resultInfo}>
+                              <Text style={styles.resultName}>{user.name}</Text>
+                              <View style={styles.resultCodeBadge}>
+                                <Ionicons name="id-card-outline" size={12} color={Colors.primary} />
+                                <Text style={styles.resultCodeText}>ID: {user.userCode}</Text>
+                              </View>
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.addToSquadBtn,
+                                isAdded && styles.alreadyAddedBtn,
+                              ]}
+                              onPress={() => handleAddSearchedPlayer(user)}
+                              disabled={isAdded || addingUserId === user.id}
+                              activeOpacity={0.8}
+                            >
+                              {addingUserId === user.id ? (
+                                <ActivityIndicator size="small" color="#0F1117" />
+                              ) : isAdded ? (
+                                <>
+                                  <Ionicons name="checkmark" size={14} color="#94A3B8" />
+                                  <Text style={styles.alreadyAddedBtnText}>Added</Text>
+                                </>
+                              ) : (
+                                <>
+                                  <Ionicons name="person-add" size={14} color="#0F1117" />
+                                  <Text style={styles.addToSquadBtnText}>+ Add</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {!searching && searchQuery.length >= 2 && searchResults.length === 0 && (
+                    <View style={styles.noResultsBox}>
+                      <Ionicons name="alert-circle-outline" size={32} color="#64748B" />
+                      <Text style={styles.noResultsTitle}>No Player Found</Text>
+                      <Text style={styles.noResultsSubtitle}>
+                        No user registered with Player ID or Name &quot;{searchQuery}&quot;.
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
-            </TouchableOpacity>
+
+              {/* SUBTAB 2: MANUAL PLAYER ENTRY */}
+              {modalMode === 'manual' && (
+                <View style={styles.modalForm}>
+                  {/* Player Name */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Player Full Name *</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      placeholder="e.g. Virat Kohli"
+                      placeholderTextColor="#64748B"
+                      value={playerName}
+                      onChangeText={setPlayerName}
+                    />
+                  </View>
+
+                  {/* Jersey Number */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Jersey Number (Optional)</Text>
+                    <TextInput
+                      style={styles.modalTextInput}
+                      placeholder="e.g. 18"
+                      placeholderTextColor="#64748B"
+                      keyboardType="number-pad"
+                      value={jerseyNumber}
+                      onChangeText={setJerseyNumber}
+                    />
+                  </View>
+
+                  {/* Role Selector */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Player Role *</Text>
+                    <View style={styles.roleGrid}>
+                      {PLAYER_ROLES.map((r) => (
+                        <TouchableOpacity
+                          key={r.value}
+                          style={[
+                            styles.roleButton,
+                            playerRole === r.value && styles.roleButtonActive,
+                          ]}
+                          onPress={() => setPlayerRole(r.value)}
+                        >
+                          <Ionicons
+                            name={r.icon as any}
+                            size={16}
+                            color={playerRole === r.value ? '#0F1117' : '#FFFFFF'}
+                          />
+                          <Text
+                            style={[
+                              styles.roleButtonText,
+                              playerRole === r.value && styles.roleButtonTextActive,
+                            ]}
+                          >
+                            {r.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Batting Style */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Batting Style</Text>
+                    <View style={styles.choiceRow}>
+                      {BATTING_STYLES.map((bs) => (
+                        <TouchableOpacity
+                          key={bs}
+                          style={[
+                            styles.choiceBtn,
+                            battingStyle === bs && styles.choiceBtnActive,
+                          ]}
+                          onPress={() => setBattingStyle(bs)}
+                        >
+                          <Text
+                            style={[
+                              styles.choiceBtnText,
+                              battingStyle === bs && styles.choiceBtnTextActive,
+                            ]}
+                          >
+                            {bs}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Bowling Style */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={styles.fieldLabel}>Bowling Style</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+                      {BOWLING_STYLES.map((bw) => (
+                        <TouchableOpacity
+                          key={bw}
+                          style={[
+                            styles.choiceBtn,
+                            bowlingStyle === bw && styles.choiceBtnActive,
+                          ]}
+                          onPress={() => setBowlingStyle(bw)}
+                        >
+                          <Text
+                            style={[
+                              styles.choiceBtnText,
+                              bowlingStyle === bw && styles.choiceBtnTextActive,
+                            ]}
+                          >
+                            {bw}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Save Button */}
+                  <TouchableOpacity
+                    style={styles.savePlayerBtn}
+                    onPress={handleManualAddPlayer}
+                    disabled={submittingPlayer}
+                    activeOpacity={0.85}
+                  >
+                    {submittingPlayer ? (
+                      <ActivityIndicator color="#0F1117" size="small" />
+                    ) : (
+                      <Text style={styles.savePlayerBtnText}>ADD TO SQUAD</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -530,7 +766,7 @@ export const TeamDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#0F1117',
   },
   centerBox: {
     justifyContent: 'center',
@@ -540,109 +776,117 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 16,
     paddingBottom: 32,
-    gap: 16,
   },
   teamHeroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
+    backgroundColor: '#161922',
+    borderRadius: 18,
     padding: 16,
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 4,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 16,
   },
   teamHeroLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2,
-    borderColor: '#00695C',
+    borderColor: Colors.primary,
   },
   teamHeroInfo: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
   heroNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
   },
   teamHeroTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: '#FFFFFF',
-    flexShrink: 1,
+    flex: 1,
   },
   heroCodeBadge: {
-    backgroundColor: 'rgba(78, 222, 163, 0.2)',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(78, 222, 163, 0.3)',
   },
   heroCodeText: {
     color: Colors.primary,
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   teamHeroMeta: {
     fontSize: 12,
     color: '#94A3B8',
+    fontWeight: '500',
   },
   teamHeroStatsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
+    marginTop: 6,
   },
   statPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#202431',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    gap: 4,
+    gap: 5,
   },
   statPillNum: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
+    color: Colors.primary,
   },
   statPillLabel: {
-    color: '#94A3B8',
     fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
   },
   tabsRow: {
     flexDirection: 'row',
-    gap: 8,
+    backgroundColor: '#161922',
+    borderRadius: 12,
+    padding: 4,
+    marginTop: 14,
   },
   tabPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#E2E8F0',
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
   },
   tabPillActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: Colors.primary,
   },
   tabPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#94A3B8',
   },
   tabPillTextActive: {
-    color: '#FFFFFF',
+    color: '#0F1117',
   },
   tabContent: {
+    marginTop: 16,
     gap: 12,
   },
   sectionHeaderRow: {
@@ -654,77 +898,79 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   addPlayerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00695C',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    gap: 4,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 6,
   },
   addPlayerBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: '#0F1117',
+    fontSize: 11,
     fontWeight: '800',
+    letterSpacing: 0.5,
   },
   emptySquadCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161922',
     borderRadius: 16,
     padding: 24,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    gap: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 10,
   },
   emptySquadTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   emptySquadText: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#94A3B8',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 17,
   },
   emptyAddBtn: {
-    marginTop: 8,
+    marginTop: 6,
+    backgroundColor: Colors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#00695C',
   },
   emptyAddBtnText: {
-    color: '#FFFFFF',
+    color: '#0F1117',
     fontSize: 12,
     fontWeight: '800',
   },
   playerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161922',
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
     gap: 12,
   },
   playerAvatarBox: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#00695C',
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 222, 163, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   playerAvatarInitial: {
-    color: '#FFFFFF',
+    color: Colors.primary,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -732,10 +978,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -4,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 3,
+    backgroundColor: '#0F1117',
+    paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#64748B',
   },
   jerseyBadgeText: {
     color: '#FFFFFF',
@@ -744,20 +992,33 @@ const styles = StyleSheet.create({
   },
   playerInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   playerNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   playerName: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
+  },
+  playerCodeBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#D4AF37',
+  },
+  playerCodeBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#D4AF37',
   },
   roleTag: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#202431',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -765,58 +1026,60 @@ const styles = StyleSheet.create({
   roleTagText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#64748B',
+    color: '#94A3B8',
     textTransform: 'uppercase',
   },
   playerDetailsText: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#94A3B8',
   },
   deletePlayerBtn: {
     padding: 8,
   },
   statsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161922',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     gap: 12,
   },
   statsTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   statLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: '600',
   },
   statVal: {
     fontSize: 13,
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161922',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    gap: 16,
+    gap: 14,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -826,30 +1089,190 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
-  modalForm: {
-    gap: 14,
+  modalSegment: {
+    flexDirection: 'row',
+    backgroundColor: '#0F1117',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  modalSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  modalSegmentBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  modalSegmentText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  modalSegmentTextActive: {
+    color: '#0F1117',
+  },
+  // Search section
+  searchSection: {
+    gap: 12,
+    paddingVertical: 6,
+  },
+  searchLabel: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  searchInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#202431',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalSearchInput: {
+    flex: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  searchLoaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  searchLoaderText: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  resultsList: {
+    gap: 8,
+    marginTop: 4,
+  },
+  resultsCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  resultItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#202431',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 12,
+  },
+  resultAvatarBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 222, 163, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultAvatarInitial: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  resultInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  resultName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  resultCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  resultCodeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  addToSquadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addToSquadBtnText: {
+    color: '#0F1117',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  alreadyAddedBtn: {
+    backgroundColor: '#334155',
+  },
+  alreadyAddedBtnText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  noResultsBox: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 6,
+  },
+  noResultsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  noResultsSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  // Manual form
+  modalForm: {
+    gap: 12,
+    paddingVertical: 6,
   },
   fieldGroup: {
-    gap: 6,
+    gap: 5,
   },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#D4AF37',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  textInput: {
-    backgroundColor: '#F8FAFC',
+  modalTextInput: {
+    backgroundColor: '#202431',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   roleGrid: {
     flexDirection: 'row',
@@ -861,25 +1284,25 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 10,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#202431',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     gap: 6,
   },
   roleButtonActive: {
-    backgroundColor: '#00695C',
-    borderColor: '#00695C',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   roleButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: '#E2E8F0',
   },
   roleButtonTextActive: {
-    color: '#FFFFFF',
+    color: '#0F1117',
   },
   choiceRow: {
     flexDirection: 'row',
@@ -889,32 +1312,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#202431',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   choiceBtnActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   choiceBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: '#94A3B8',
   },
   choiceBtnTextActive: {
-    color: '#FFFFFF',
+    color: '#0F1117',
   },
   savePlayerBtn: {
-    backgroundColor: '#00695C',
+    backgroundColor: Colors.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 6,
   },
   savePlayerBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: '#0F1117',
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5,
   },

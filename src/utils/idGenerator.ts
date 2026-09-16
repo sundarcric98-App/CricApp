@@ -3,8 +3,6 @@
  * Example:
  * - "Sundar" -> "SUND4821"
  * - "Alpha Warriors" -> "ALPH9204"
- * - "Madatugama Trophy" -> "MADA1093"
- * - "Om" -> "OMXX5521"
  */
 export const generateCustomId = (name: string): string => {
   if (!name || typeof name !== 'string') {
@@ -12,14 +10,29 @@ export const generateCustomId = (name: string): string => {
     return `CRIC${randomDigits}`;
   }
 
-  // Remove non-alphabetic characters and convert to uppercase
   const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase();
-  
-  // Take first 4 characters, or pad with 'X' if shorter than 4
-  const prefix = (cleaned.length >= 4 ? cleaned.slice(0, 4) : cleaned.padEnd(4, 'X'));
-  
-  // Generate 4-digit random number (1000 - 9999)
+  const prefix = cleaned.length >= 4 ? cleaned.slice(0, 4) : cleaned.padEnd(4, 'X');
   const randomDigits = Math.floor(1000 + Math.random() * 9000);
+
+  return `${prefix}${randomDigits}`;
+};
+
+/**
+ * Generates a unique Player / User ID from username with first 3 letters + 3 random digits.
+ * Example:
+ * - "yuvi" -> "yuv123"
+ * - "virat" -> "vir482"
+ * - "ms" -> "msx789"
+ */
+export const generatePlayerIdFromUsername = (username: string): string => {
+  if (!username || typeof username !== 'string') {
+    const randomDigits = Math.floor(100 + Math.random() * 900);
+    return `ply${randomDigits}`;
+  }
+
+  const cleaned = username.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  const prefix = cleaned.length >= 3 ? cleaned.slice(0, 3) : cleaned.padEnd(3, 'x');
+  const randomDigits = Math.floor(100 + Math.random() * 900);
 
   return `${prefix}${randomDigits}`;
 };

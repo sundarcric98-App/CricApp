@@ -23,8 +23,10 @@ export type WicketType =
 export interface User {
   id: string;
   name: string;
-  mobile: string;
-  userCode: string; // e.g. SUND4821
+  username?: string;
+  email?: string;
+  mobile?: string;
+  userCode: string; // e.g. yuv123 or SUND4821
   profileImage?: string;
   createdAt?: string;
 }
@@ -83,6 +85,8 @@ export interface Player {
   shortName: string;
   avatar: string;
   teamId: string;
+  userId?: string;
+  userCode?: string;
   role: PlayerRole;
   battingStyle: string;
   bowlingStyle: string;
@@ -96,7 +100,7 @@ export interface Player {
     runs: number;
     balls: number;
     isOut: boolean;
-    date: string;
+    date?: string;
   }[];
 }
 
@@ -164,6 +168,8 @@ export interface AddPlayerPayload {
   isCaptain?: boolean;
   isWicketkeeper?: boolean;
   isViceCaptain?: boolean;
+  userId?: string;
+  userCode?: string;
 }
 
 export interface CreateTeamPayload {

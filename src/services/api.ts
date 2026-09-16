@@ -22,7 +22,7 @@ import {
   User,
 } from '../types/cricket';
 import { applyBallToMatch, ballsToOvers, oversToBalls } from '../utils/cricketRules';
-import { generateCustomId } from '../utils/idGenerator';
+import { generateCustomId, generatePlayerIdFromUsername } from '../utils/idGenerator';
 import supabase from './supabase';
 
 // In-memory cache & fallback stores
@@ -90,6 +90,159 @@ export const cricketApi = {
   // ==========================================
   // AUTHENTICATION & PROFILE APIS
   // ==========================================
+
+  // 1. Sign Up with Username, Email, Password -> Generates Player ID (e.g. yuvi -> yuv123)
+  async signUp(payload: {
+    username: string;
+    email: string;
+    password: string;
+    name?: string;
+  }): Promise<{ user: User; userCode: string }> {
+    const cleanUsername = payload.username.trim().toLowerCase();
+    const cleanEmail = payload.email.trim().toLowerCase();
+    const cleanName = payload.name?.trim() || payload.username.trim();
+    const userCode = generatePlayerIdFromUsername(cleanUsername);
+
+    try {
+      const { data: user, error } = await supabase
+        .from('users')
+        .insert([
+          {
+            username: cleanUsername,
+            email: cleanEmail,
+            name: cleanName,
+            password_hash: payload.password,
+            user_code: userCode,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.warn('Supabase signUp error:', error.message);
+        throw new Error(error.message);
+      }
+
+      if (user) {
+        // Initialize player_stats
+        try {
+          await supabase.from('player_stats').insert([{ user_id: user.id }]).select();
+        } catch (e) {
+          console.warn('player_stats init error:', e);
+        }
+
+        const createdUser: User = {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          userCode: user.user_code,
+          profileImage: user.profile_image || undefined,
+        };
+
+        return { user: createdUser, userCode: user.user_code };
+      }
+    } catch (err: any) {
+      if (err?.message) throw err;
+    }
+
+    const fallbackUser: User = {
+      id: `usr_${Date.now()}`,
+      name: cleanName,
+      username: cleanUsername,
+      email: cleanEmail,
+      userCode,
+      profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+    };
+
+    return { user: fallbackUser, userCode };
+  },
+
+  // 2. Sign In with Email / Username / Player ID + Password
+  async signIn(payload: {
+    identifier: string;
+    password: string;
+  }): Promise<{ user: User; token: string }> {
+    const cleanIdentifier = payload.identifier.trim().toLowerCase();
+
+    try {
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .or(`email.ilike.${cleanIdentifier},username.ilike.${cleanIdentifier},user_code.ilike.${cleanIdentifier}`)
+        .maybeSingle();
+
+      if (user) {
+        if (user.password_hash && user.password_hash !== payload.password) {
+          throw new Error('Incorrect password. Please try again.');
+        }
+
+        const authenticatedUser: User = {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          mobile: user.mobile,
+          userCode: user.user_code,
+          profileImage: user.profile_image || undefined,
+        };
+
+        return {
+          user: authenticatedUser,
+          token: `token_${user.id}`,
+        };
+      }
+    } catch (err: any) {
+      if (err?.message?.includes('Incorrect password')) throw err;
+      console.warn('Supabase signIn error:', err);
+    }
+
+    // Fallback for testing
+    const fallbackCode = cleanIdentifier.includes('@')
+      ? generatePlayerIdFromUsername(cleanIdentifier.split('@')[0])
+      : cleanIdentifier;
+
+    return {
+      user: {
+        id: 'user_sundar_01',
+        name: cleanIdentifier.split('@')[0],
+        username: cleanIdentifier.split('@')[0],
+        email: cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@criclivex.com`,
+        userCode: fallbackCode,
+        profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+      },
+      token: `mock_token_${Date.now()}`,
+    };
+  },
+
+  // 3. Search Player by Player Code (e.g. yuv123) or Username or Name
+  async searchPlayerByCode(query: string): Promise<User[]> {
+    if (!query || query.trim().length < 2) return [];
+    const cleanQuery = query.trim().toLowerCase();
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, username, email, user_code, profile_image')
+        .or(`user_code.ilike.%${cleanQuery}%,username.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
+        .limit(10);
+
+      if (!error && data && data.length > 0) {
+        return data.map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: u.email,
+          userCode: u.user_code,
+          profileImage: u.profile_image || undefined,
+        }));
+      }
+    } catch (err) {
+      console.warn('searchPlayerByCode error:', err);
+    }
+
+    return [];
+  },
 
   async sendWhatsAppOtp(
     mobile: string
@@ -612,7 +765,7 @@ export const cricketApi = {
 
       const { data: playersData } = await supabase
         .from('team_players')
-        .select('*')
+        .select('*, users(id, name, username, email, user_code, profile_image)')
         .eq('team_id', teamId);
 
       if (teamData) {
@@ -631,10 +784,12 @@ export const cricketApi = {
 
         const players: Player[] = (playersData || []).map((p: any) => ({
           id: p.id,
-          name: p.name || 'Player',
-          shortName: (p.name || 'Player').split(' ').map((w: string, i: number) => (i === 0 ? w[0] + '.' : w)).join(' '),
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+          name: p.users?.name || p.name || 'Player',
+          shortName: (p.users?.name || p.name || 'Player').split(' ').map((w: string, i: number) => (i === 0 ? w[0] + '.' : w)).join(' '),
+          avatar: p.users?.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
           teamId,
+          userId: p.user_id || p.users?.id,
+          userCode: p.users?.user_code || p.user_code,
           role: p.role || 'batsman',
           battingStyle: p.batting_style || 'Right-hand bat',
           bowlingStyle: p.bowling_style || 'Right-arm medium',
@@ -677,12 +832,14 @@ export const cricketApi = {
   },
 
   async addPlayerToTeam(teamId: string, payload: AddPlayerPayload): Promise<Player> {
+    const userIdUuid = isValidUUID(payload.userId) ? payload.userId : null;
     try {
       const { data, error } = await supabase
         .from('team_players')
         .insert([
           {
             team_id: teamId,
+            user_id: userIdUuid,
             name: payload.name,
             role: payload.role || 'batsman',
             batting_style: payload.battingStyle || 'Right-hand bat',
@@ -692,16 +849,18 @@ export const cricketApi = {
             is_wicketkeeper: payload.isWicketkeeper || false,
           },
         ])
-        .select()
+        .select('*, users(id, name, username, email, user_code, profile_image)')
         .single();
 
       if (!error && data) {
         return {
           id: data.id,
-          name: data.name,
+          name: data.users?.name || data.name,
           shortName: payload.name.split(' ').map((w, i) => (i === 0 ? w[0] + '.' : w)).join(' '),
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+          avatar: data.users?.profile_image || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
           teamId,
+          userId: data.user_id || data.users?.id,
+          userCode: data.users?.user_code || payload.userCode,
           role: data.role,
           battingStyle: data.batting_style,
           bowlingStyle: data.bowling_style,
@@ -738,6 +897,8 @@ export const cricketApi = {
       shortName: payload.name.split(' ').map((w, i) => (i === 0 ? w[0] + '.' : w)).join(' '),
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
       teamId,
+      userId: payload.userId,
+      userCode: payload.userCode,
       role: payload.role || 'batsman',
       battingStyle: payload.battingStyle || 'Right-hand bat',
       bowlingStyle: payload.bowlingStyle || 'Right-arm medium',

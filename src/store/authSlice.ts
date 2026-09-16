@@ -12,6 +12,7 @@ interface AuthState {
   pendingMobile: string | null;
   devOtp: string | null;
   isNewUser: boolean;
+  lastRegisteredPlayerCode: string | null;
 }
 
 const initialState: AuthState = {
@@ -31,7 +32,40 @@ const initialState: AuthState = {
   pendingMobile: null,
   devOtp: null,
   isNewUser: false,
+  lastRegisteredPlayerCode: null,
 };
+
+// 1. Sign Up Thunk (Username, Email, Password -> Generates Player ID like yuv123)
+export const signUp = createAsyncThunk(
+  'auth/signUp',
+  async (
+    payload: { username: string; email: string; password: string; name?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await cricketApi.signUp(payload);
+      return response;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || err.message || 'Signup failed');
+    }
+  }
+);
+
+// 2. Sign In Thunk (Email / Username / Player ID + Password)
+export const signIn = createAsyncThunk(
+  'auth/signIn',
+  async (
+    payload: { identifier: string; password: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await cricketApi.signIn(payload);
+      return response;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.error || err.message || 'Login failed');
+    }
+  }
+);
 
 export const sendWhatsAppOtp = createAsyncThunk(
   'auth/sendWhatsAppOtp',
@@ -102,6 +136,7 @@ export const authSlice = createSlice({
       state.pendingMobile = null;
       state.devOtp = null;
       state.isNewUser = false;
+      state.lastRegisteredPlayerCode = null;
     },
     clearAuthError: (state) => {
       state.error = null;
@@ -111,8 +146,44 @@ export const authSlice = createSlice({
         state.currentUser = { ...state.currentUser, ...action.payload };
       }
     },
+    setCurrentUser: (state, action: PayloadAction<User>) => {
+      state.currentUser = action.payload;
+      state.isAuthenticated = true;
+    },
   },
   extraReducers: (builder) => {
+    // 1. Sign Up
+    builder
+      .addCase(signUp.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(signUp.fulfilled, (state, action) => {
+        state.loading = false;
+        state.lastRegisteredPlayerCode = action.payload.userCode;
+      })
+      .addCase(signUp.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
+    // 2. Sign In
+    builder
+      .addCase(signIn.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(signIn.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentUser = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+      })
+      .addCase(signIn.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      });
+
     // Send OTP
     builder
       .addCase(sendWhatsAppOtp.pending, (state) => {
@@ -188,5 +259,6 @@ export const authSlice = createSlice({
   },
 });
 
-export const { setPendingMobile, logout, clearAuthError, updateUserProfile } = authSlice.actions;
+export const { setPendingMobile, logout, clearAuthError, updateUserProfile, setCurrentUser } =
+  authSlice.actions;
 export default authSlice.reducer;
