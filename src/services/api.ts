@@ -743,7 +743,47 @@ export const cricketApi = {
           status: 'upcoming',
         };
 
-        // Fetch standings
+        // 1. Fetch participating teams from tournament_teams joining teams
+        let teams: Team[] = [];
+        try {
+          const { data: tourTeamsData, error: tourTeamsError } = await supabase
+            .from('tournament_teams')
+            .select('team_id, group_name, teams(*)')
+            .eq('tournament_id', tData.id);
+
+          if (!tourTeamsError && tourTeamsData && tourTeamsData.length > 0) {
+            teams = tourTeamsData.map((row: any) => {
+              const t = Array.isArray(row.teams) ? row.teams[0] : row.teams;
+              const teamName = t?.name || 'Team';
+              return {
+                id: t?.id || row.team_id,
+                name: teamName,
+                shortName: t?.short_name || teamName.slice(0, 3).toUpperCase(),
+                code: generateCustomId(teamName),
+                logo: t?.logo_url || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
+                logoUrl: t?.logo_url || 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
+                city: t?.city || 'City',
+                totalPlayers: 11,
+                stats: { played: 0, won: 0, lost: 0, winRate: 0 },
+              };
+            });
+          }
+        } catch (e) {
+          console.warn('Error fetching tournament_teams:', e);
+        }
+
+        // Merge with in-memory statefulTournamentTeams if any
+        const inMemIds = statefulTournamentTeams[tData.id] || statefulTournamentTeams[tournamentId] || [];
+        for (const tid of inMemIds) {
+          if (!teams.some((tm) => tm.id === tid)) {
+            const foundInAll = statefulTeams.find((st) => st.id === tid);
+            if (foundInAll) {
+              teams.push(foundInAll);
+            }
+          }
+        }
+
+        // 2. Fetch standings
         const { data: standingsData } = await supabase
           .from('points_table')
           .select('id, matches, wins, losses, ties, points, nrr, recent_form, teams(id, name, short_name, logo_url)')
@@ -771,10 +811,21 @@ export const cricketApi = {
           qualified: idx < 4,
         }));
 
+        // 3. Fetch tournament fixtures / matches
+        let tournamentMatches: Match[] = [];
+        try {
+          const allMatches = await this.getMatches();
+          tournamentMatches = allMatches.filter(
+            (m) => m.tournamentId === tData.id || m.seriesName === tournament.name
+          );
+        } catch {
+          // ignore match fetch error
+        }
+
         return {
-          tournament: { ...tournament, totalTeams: standings.length },
-          teams: [],
-          matches: [],
+          tournament: { ...tournament, totalTeams: teams.length || standings.length },
+          teams,
+          matches: tournamentMatches,
           standings,
         };
       }
@@ -787,28 +838,93 @@ export const cricketApi = {
       throw new Error(`Tournament with ID ${tournamentId} not found`);
     }
 
+    const inMemIds = statefulTournamentTeams[tournamentId] || [];
+    const teams = statefulTeams.filter((t) => inMemIds.includes(t.id));
+
     return {
-      tournament,
-      teams: [],
+      tournament: { ...tournament, totalTeams: teams.length },
+      teams,
       matches: [],
       standings: [],
     };
   },
 
   async addTeamToTournament(tournamentId: string, teamId: string): Promise<void> {
+    const isTourUuid = isValidUUID(tournamentId);
+    const isTeamUuid = isValidUUID(teamId);
+
     try {
-      await supabase.from('tournament_teams').insert([{ tournament_id: tournamentId, team_id: teamId }]);
+      if (isTourUuid && isTeamUuid) {
+        // 1. Insert into tournament_teams table
+        const { error: ttError } = await supabase
+          .from('tournament_teams')
+          .insert([{ tournament_id: tournamentId, team_id: teamId }]);
+
+        if (ttError) {
+          console.warn('Supabase tournament_teams insert error:', ttError.message);
+        }
+
+        // 2. Also register in points_table so team shows up in standings
+        const { error: ptError } = await supabase
+          .from('points_table')
+          .insert([
+            {
+              tournament_id: tournamentId,
+              team_id: teamId,
+              matches: 0,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              no_results: 0,
+              points: 0,
+              runs_scored: 0,
+              overs_faced: 0,
+              runs_conceded: 0,
+              overs_bowled: 0,
+              nrr: 0,
+              recent_form: [],
+            },
+          ]);
+
+        if (ptError) {
+          console.warn('Supabase points_table insert error:', ptError.message);
+        }
+      }
     } catch (e) {
       console.warn('addTeamToTournament error:', e);
+    }
+
+    // Always update in-memory cache for instant UI response
+    const current = statefulTournamentTeams[tournamentId] || [];
+    if (!current.includes(teamId)) {
+      statefulTournamentTeams[tournamentId] = [...current, teamId];
     }
   },
 
   async removeTeamFromTournament(tournamentId: string, teamId: string): Promise<void> {
+    const isTourUuid = isValidUUID(tournamentId);
+    const isTeamUuid = isValidUUID(teamId);
+
     try {
-      await supabase.from('tournament_teams').delete().eq('tournament_id', tournamentId).eq('team_id', teamId);
+      if (isTourUuid && isTeamUuid) {
+        await supabase
+          .from('tournament_teams')
+          .delete()
+          .eq('tournament_id', tournamentId)
+          .eq('team_id', teamId);
+
+        await supabase
+          .from('points_table')
+          .delete()
+          .eq('tournament_id', tournamentId)
+          .eq('team_id', teamId);
+      }
     } catch (e) {
       console.warn('removeTeamFromTournament error:', e);
     }
+
+    const current = statefulTournamentTeams[tournamentId] || [];
+    statefulTournamentTeams[tournamentId] = current.filter((id) => id !== teamId);
   },
 
   // ==========================================

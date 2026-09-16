@@ -74,12 +74,17 @@ export const TournamentDetailScreen: React.FC = () => {
 
   const handleAddTeam = async (teamId: string) => {
     if (!tournamentId) return;
+    const selectedTeam = allTeams.find((t) => t.id === teamId);
+    if (selectedTeam) {
+      setTournamentTeams((prev) => [...prev, selectedTeam]);
+    }
+    setShowAddTeamModal(false);
     try {
       await cricketApi.addTeamToTournament(tournamentId, teamId);
-      setShowAddTeamModal(false);
-      loadTournamentData();
+      await loadTournamentData();
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to add team to tournament');
+      loadTournamentData();
     }
   };
 
@@ -91,6 +96,7 @@ export const TournamentDetailScreen: React.FC = () => {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
+          setTournamentTeams((prev) => prev.filter((t) => t.id !== teamId));
           await cricketApi.removeTeamFromTournament(tournamentId, teamId);
           loadTournamentData();
         },
