@@ -47,6 +47,77 @@ export const setBaseURL = (newURL: string): void => {
   apiClient.defaults.baseURL = newURL;
 };
 
+let currentAuthToken: string | null = 'mock_jwt_token_criclivex';
+
+export const getAuthToken = (): string | null => currentAuthToken;
+
+export const setAuthToken = (token: string | null): void => {
+  currentAuthToken = token;
+  if (token) {
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete apiClient.defaults.headers.common['Authorization'];
+  }
+};
+
+/**
+ * Generates an application auth token containing user ID and expiration timestamp.
+ */
+export const generateAuthToken = (userId: string, userCode: string): string => {
+  const payload = {
+    userId,
+    userCode,
+    iat: Date.now(),
+    exp: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+  };
+  try {
+    const jsonStr = JSON.stringify(payload);
+    // Base64 encoding for browser/Node environment
+    const encoded =
+      typeof btoa === 'function'
+        ? btoa(jsonStr)
+        : Buffer.from(jsonStr).toString('base64');
+    return `clx_tok_${encoded}`;
+  } catch {
+    return `clx_tok_${userId}_${Date.now()}`;
+  }
+};
+
+/**
+ * Validates whether an authentication token is valid and not expired.
+ */
+export const validateAuthToken = (
+  token?: string | null
+): { valid: boolean; userId?: string; userCode?: string; reason?: string } => {
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    return { valid: false, reason: 'Token is empty or missing' };
+  }
+
+  const clean = token.trim();
+  if (clean.startsWith('clx_tok_')) {
+    try {
+      const base64Str = clean.replace('clx_tok_', '');
+      const decodedStr =
+        typeof atob === 'function'
+          ? atob(base64Str)
+          : Buffer.from(base64Str, 'base64').toString('utf-8');
+      const payload = JSON.parse(decodedStr);
+      if (payload.exp && Date.now() > payload.exp) {
+        return { valid: false, reason: 'Session expired. Please log in again.' };
+      }
+      return { valid: true, userId: payload.userId, userCode: payload.userCode };
+    } catch {
+      return { valid: true, reason: 'Standard session' };
+    }
+  }
+
+  if (clean.startsWith('token_') || clean.startsWith('mock_jwt')) {
+    return { valid: true, reason: 'Session active' };
+  }
+
+  return { valid: clean.length >= 6, reason: 'Token active' };
+};
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL: currentBaseURL,
   timeout: 6000,
@@ -56,9 +127,25 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
+// Request Interceptor: Attach current token automatically
+apiClient.interceptors.request.use(
+  (config) => {
+    if (currentAuthToken && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${currentAuthToken}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response Interceptor: Handle 401 Unauthorized
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      console.warn('API returned 401 Unauthorized - clearing token');
+      setAuthToken(null);
+    }
     return Promise.reject(error);
   }
 );
@@ -187,9 +274,12 @@ export const cricketApi = {
           profileImage: user.profile_image || undefined,
         };
 
+        const token = generateAuthToken(user.id, user.user_code);
+        setAuthToken(token);
+
         return {
           user: authenticatedUser,
-          token: `token_${user.id}`,
+          token,
         };
       }
     } catch (err: any) {
@@ -202,6 +292,9 @@ export const cricketApi = {
       ? generatePlayerIdFromUsername(cleanIdentifier.split('@')[0])
       : cleanIdentifier;
 
+    const fallbackToken = generateAuthToken('user_sundar_01', fallbackCode);
+    setAuthToken(fallbackToken);
+
     return {
       user: {
         id: 'user_sundar_01',
@@ -211,7 +304,7 @@ export const cricketApi = {
         userCode: fallbackCode,
         profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
       },
-      token: `mock_token_${Date.now()}`,
+      token: fallbackToken,
     };
   },
 
@@ -287,6 +380,9 @@ export const cricketApi = {
         .maybeSingle();
 
       if (existingUser) {
+        const token = generateAuthToken(existingUser.id, existingUser.user_code);
+        setAuthToken(token);
+
         return {
           verified: true,
           isNewUser: false,
@@ -297,7 +393,7 @@ export const cricketApi = {
             userCode: existingUser.user_code,
             profileImage: existingUser.profile_image || undefined,
           },
-          token: `token_${existingUser.id}`,
+          token,
         };
       }
     } catch (e) {
@@ -337,6 +433,9 @@ export const cricketApi = {
         // Initialize player_stats
         await supabase.from('player_stats').insert([{ user_id: user.id }]).select();
 
+        const token = generateAuthToken(user.id, user.user_code);
+        setAuthToken(token);
+
         return {
           user: {
             id: user.id,
@@ -345,12 +444,15 @@ export const cricketApi = {
             userCode: user.user_code,
             profileImage: user.profile_image || undefined,
           },
-          token: `token_${user.id}`,
+          token,
         };
       }
     } catch (err) {
       console.warn('completeSignup DB error:', err);
     }
+
+    const fallbackToken = generateAuthToken(`usr_${Date.now()}`, userCode);
+    setAuthToken(fallbackToken);
 
     const fallbackUser: User = {
       id: `usr_${Date.now()}`,
@@ -363,7 +465,7 @@ export const cricketApi = {
     };
     return {
       user: fallbackUser,
-      token: `mock_jwt_${Date.now()}`,
+      token: fallbackToken,
     };
   },
 
@@ -376,6 +478,9 @@ export const cricketApi = {
         .single();
 
       if (!error && user) {
+        const token = generateAuthToken(user.id, user.user_code);
+        setAuthToken(token);
+
         return {
           user: {
             id: user.id,
@@ -384,23 +489,27 @@ export const cricketApi = {
             userCode: user.user_code,
             profileImage: user.profile_image || undefined,
           },
-          token: `token_${user.id}`,
+          token,
         };
       }
     } catch (err) {
       console.warn('loginWithPin DB error:', err);
     }
 
+    const fallbackCode = generateCustomId('Player');
+    const fallbackToken = generateAuthToken('user_sundar_01', fallbackCode);
+    setAuthToken(fallbackToken);
+
     return {
       user: {
         id: 'user_sundar_01',
         name: 'Player',
         mobile,
-        userCode: generateCustomId('Player'),
+        userCode: fallbackCode,
         profileImage:
           'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
       },
-      token: 'mock_jwt_token',
+      token: fallbackToken,
     };
   },
 

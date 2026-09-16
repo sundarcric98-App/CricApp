@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import cricketApi from '../services/api';
+import cricketApi, { setAuthToken, validateAuthToken } from '../services/api';
 import { User } from '../types/cricket';
 
 interface AuthState {
@@ -60,9 +60,32 @@ export const signIn = createAsyncThunk(
   ) => {
     try {
       const response = await cricketApi.signIn(payload);
+      if (response.token) {
+        setAuthToken(response.token);
+      }
       return response;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || err.message || 'Login failed');
+    }
+  }
+);
+
+// 3. Token Validation Thunk
+export const validateSessionToken = createAsyncThunk(
+  'auth/validateSessionToken',
+  async (_, { getState, dispatch, rejectWithValue }) => {
+    try {
+      const state = getState() as { auth: AuthState };
+      const token = state.auth.token;
+      const validation = validateAuthToken(token);
+      if (!validation.valid) {
+        dispatch(authSlice.actions.logout());
+        return rejectWithValue(validation.reason || 'Token is invalid');
+      }
+      return validation;
+    } catch (err: any) {
+      dispatch(authSlice.actions.logout());
+      return rejectWithValue(err.message || 'Failed to validate token');
     }
   }
 );
@@ -84,6 +107,9 @@ export const verifyOtp = createAsyncThunk(
   async ({ mobile, otp }: { mobile: string; otp: string }, { rejectWithValue }) => {
     try {
       const response = await cricketApi.verifyOtp(mobile, otp);
+      if (response.token) {
+        setAuthToken(response.token);
+      }
       return response;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || err.message || 'Failed to verify OTP');
@@ -99,6 +125,9 @@ export const completeSignup = createAsyncThunk(
   ) => {
     try {
       const response = await cricketApi.completeSignup(payload);
+      if (response.token) {
+        setAuthToken(response.token);
+      }
       return response;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || err.message || 'Registration failed');
@@ -114,6 +143,9 @@ export const loginWithPin = createAsyncThunk(
   ) => {
     try {
       const response = await cricketApi.loginWithPin(payload.mobile, payload.pin);
+      if (response.token) {
+        setAuthToken(response.token);
+      }
       return response;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.error || err.message || 'Login failed');
@@ -137,6 +169,8 @@ export const authSlice = createSlice({
       state.devOtp = null;
       state.isNewUser = false;
       state.lastRegisteredPlayerCode = null;
+      // Clear token from HTTP client headers
+      setAuthToken(null);
     },
     clearAuthError: (state) => {
       state.error = null;
@@ -178,10 +212,19 @@ export const authSlice = createSlice({
         state.currentUser = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        setAuthToken(action.payload.token);
       })
       .addCase(signIn.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      });
+
+    // 3. Validate Session Token
+    builder
+      .addCase(validateSessionToken.rejected, (state) => {
+        state.currentUser = null;
+        state.token = null;
+        state.isAuthenticated = false;
       });
 
     // Send OTP
@@ -214,6 +257,7 @@ export const authSlice = createSlice({
           state.currentUser = action.payload.user;
           state.token = action.payload.token;
           state.isAuthenticated = true;
+          setAuthToken(action.payload.token);
         } else {
           state.isNewUser = true;
         }
@@ -234,6 +278,7 @@ export const authSlice = createSlice({
         state.currentUser = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        setAuthToken(action.payload.token);
       })
       .addCase(completeSignup.rejected, (state, action) => {
         state.loading = false;
@@ -251,6 +296,7 @@ export const authSlice = createSlice({
         state.currentUser = action.payload.user;
         state.token = action.payload.token;
         state.isAuthenticated = true;
+        setAuthToken(action.payload.token);
       })
       .addCase(loginWithPin.rejected, (state, action) => {
         state.loading = false;

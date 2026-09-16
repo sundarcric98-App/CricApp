@@ -26,6 +26,13 @@ export const PlayerStatCard: React.FC<PlayerStatCardProps> = ({ player }) => {
             <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
           </View>
 
+          {player.userCode ? (
+            <View style={styles.userCodeBadge}>
+              <Ionicons name="id-card-outline" size={12} color={Colors.primary} />
+              <Text style={styles.userCodeBadgeText}>ID: {player.userCode}</Text>
+            </View>
+          ) : null}
+
           <View style={styles.roleTag}>
             <Text style={styles.roleText}>{player.role.toUpperCase()}</Text>
           </View>
@@ -171,6 +178,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: Colors.onSurface,
+  },
+  userCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#D4AF37',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginVertical: 2,
+  },
+  userCodeBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#D4AF37',
+    letterSpacing: 0.5,
   },
   roleTag: {
     backgroundColor: 'rgba(78, 222, 163, 0.15)',
