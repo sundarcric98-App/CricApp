@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   RefreshControl,
   ScrollView,
   Share,
@@ -21,8 +22,11 @@ import BatsmanTable from '../components/scorecard/BatsmanTable';
 import BowlerTable from '../components/scorecard/BowlerTable';
 import MatchStatsTab from '../components/scorecard/MatchStatsTab';
 import Colors from '../constants/colors';
+import cricketApi from '../services/api';
 import { fetchCommentary, fetchMatchDetails } from '../store/matchSlice';
 import { useAppDispatch, useAppSelector } from '../store/store';
+import { Player } from '../types/cricket';
+import { oversToBalls } from '../utils/cricketRules';
 
 export const MatchDetailScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,12 +39,29 @@ export const MatchDetailScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MatchDetailTab>('scorecard');
   const [commentaryFilter, setCommentaryFilter] = useState<'all' | 'boundary' | 'wicket'>('all');
   const [activeInningsView, setActiveInningsView] = useState<1 | 2>(1);
+  const [team1Squad, setTeam1Squad] = useState<Player[]>([]);
+  const [team2Squad, setTeam2Squad] = useState<Player[]>([]);
 
   useEffect(() => {
     if (matchId) {
       dispatch(fetchMatchDetails(matchId));
     }
   }, [dispatch, matchId]);
+
+  useEffect(() => {
+    if (currentMatch?.team1?.id && currentMatch.team1.id !== 'team_a') {
+      cricketApi
+        .getTeamById(currentMatch.team1.id)
+        .then((res) => setTeam1Squad(res.players || []))
+        .catch(() => setTeam1Squad([]));
+    }
+    if (currentMatch?.team2?.id && currentMatch.team2.id !== 'team_b') {
+      cricketApi
+        .getTeamById(currentMatch.team2.id)
+        .then((res) => setTeam2Squad(res.players || []))
+        .catch(() => setTeam2Squad([]));
+    }
+  }, [currentMatch?.team1?.id, currentMatch?.team2?.id]);
 
   const handleRefresh = () => {
     if (matchId) {
@@ -58,42 +79,49 @@ export const MatchDetailScreen: React.FC = () => {
   const handleShareScorecard = async () => {
     if (!currentMatch) return;
     try {
-      const summary = `🏏 ${currentMatch.title} (${currentMatch.seriesName})\n` +
-        `📍 ${currentMatch.venue}, ${currentMatch.city}\n` +
-        `🪙 ${currentMatch.toss || 'Toss not recorded'}\n` +
-        `📊 ${currentMatch.team1.shortName}: ${currentMatch.team1.score}/${currentMatch.team1.wickets} (${currentMatch.team1.overs.toFixed(1)} ov)\n` +
-        `📊 ${currentMatch.team2.shortName}: ${currentMatch.team2.score}/${currentMatch.team2.wickets} (${currentMatch.team2.overs.toFixed(1)} ov)\n` +
-        `🏆 Result: ${currentMatch.result || 'Match in progress'}\n` +
-        (currentMatch.manOfTheMatchName ? `🌟 Player of the Match: ${currentMatch.manOfTheMatchName}\n` : '') +
-        `Scored on CricLiveX 🚀`;
+      const shareUrl = `https://criclivex.app/match/${currentMatch.id}`;
+      const msg = `🏆 *${currentMatch.title}* Live Score!\n${currentMatch.team1.name}: ${currentMatch.team1.score}/${currentMatch.team1.wickets} (${currentMatch.team1.overs} ov)\n${currentMatch.team2.name}: ${currentMatch.team2.score}/${currentMatch.team2.wickets} (${currentMatch.team2.overs} ov)\n👉 Follow on CricLiveX: ${shareUrl}`;
 
-      await Share.share({
-        message: summary,
-        title: `${currentMatch.title} Scorecard`,
-      });
-    } catch (err: any) {
-      Alert.alert('Share', err.message || 'Could not share scorecard');
+      if (Platform.OS === 'web' && navigator.share) {
+        await navigator.share({
+          title: currentMatch.title,
+          text: msg,
+          url: shareUrl,
+        });
+      } else {
+        await Share.share({
+          message: msg,
+          title: currentMatch.title,
+        });
+      }
+    } catch (error) {
+      console.log('Share error:', error);
     }
   };
 
+  if (loading && !currentMatch) {
+    return (
+      <View style={styles.container}>
+        <Header showBack title="Match Detail" onBackPress={() => router.back()} />
+        <View style={styles.centerBox}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.loadingText}>Fetching live scorecard...</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (!currentMatch) {
     return (
-      <View style={styles.loadingContainer}>
-        <Header showBack title="Match Detail" />
+      <View style={styles.container}>
+        <Header showBack title="Match Detail" onBackPress={() => router.back()} />
         <View style={styles.centerBox}>
-          {loading ? (
-            <>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.loadingText}>Loading match scorecard...</Text>
-            </>
-          ) : (
-            <EmptyState
-              title="Match Not Found"
-              description="This match could not be found or has not started yet."
-              actionLabel="Back to Matches"
-              onAction={() => router.replace('/(tabs)' as any)}
-            />
-          )}
+          <EmptyState
+            title="Match Not Found"
+            description="Could not load match data. Please verify match ID."
+            actionLabel="Return to Matches"
+            onAction={() => router.replace('/(tabs)' as any)}
+          />
         </View>
       </View>
     );
@@ -109,39 +137,34 @@ export const MatchDetailScreen: React.FC = () => {
   const currentBowlingTeamName =
     activeInningsView === 2 ? match.team1.name : match.team2.name;
 
-  // Compute Did Not Bat player list
+  // Compute exact Did Not Bat player list from actual team squad
   const activeBattingSquad =
     activeInningsView === 2
-      ? (match.playingXI?.team2 || [])
-      : (match.playingXI?.team1 || []);
+      ? (team2Squad.length > 0 ? team2Squad : (match.playingXI?.team2 || []))
+      : (team1Squad.length > 0 ? team1Squad : (match.playingXI?.team1 || []));
 
   const currentBatters = currentInningsData?.batting || [
     match.activeBatters.striker,
     match.activeBatters.nonStriker,
   ];
 
-  const currentBatterNames = currentBatters.map((b) => b.name.toLowerCase());
-  let didNotBatPlayers = activeBattingSquad
-    .filter((p) => !currentBatterNames.includes(p.name.toLowerCase()))
-    .map((p) => p.name);
+  const currentBatterNames = currentBatters.map((b) => b.name?.trim().toLowerCase());
+  const currentBatterIds = currentBatters.map((b) => b.playerId);
 
-  if (didNotBatPlayers.length === 0) {
-    didNotBatPlayers = [
-      'Nitish Kumar Reddy',
-      'Shivam Dube',
-      'Axar Patel',
-      'Arshdeep Singh',
-      'Jasprit Bumrah',
-      'Varun Chakaravarthy',
-    ];
-  }
+  const didNotBatPlayers = activeBattingSquad
+    .filter((p) => p && p.name && !currentBatterNames.includes(p.name.trim().toLowerCase()) && !currentBatterIds.includes(p.id))
+    .map((p) => p.name);
 
   const battingScore =
     activeInningsView === 2 ? match.team2.score : match.team1.score;
   const battingWickets =
     activeInningsView === 2 ? match.team2.wickets : match.team1.wickets;
-  const battingOvers =
+  const maxOversForInnings =
+    (activeInningsView === 2 ? match.team2.maxOvers : match.team1.maxOvers) || 20;
+  const rawBattingOvers =
     activeInningsView === 2 ? match.team2.overs : match.team1.overs;
+  const battingOvers = Math.min(maxOversForInnings, rawBattingOvers);
+
   const runRate =
     battingOvers > 0 ? (battingScore / (Math.floor(battingOvers) + (battingOvers % 1) * (10 / 6))).toFixed(2) : '0.00';
 
@@ -150,6 +173,7 @@ export const MatchDetailScreen: React.FC = () => {
       <Header
         showBack
         title="Match Detail"
+        onBackPress={() => router.back()}
         rightAction={
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <TouchableOpacity
@@ -219,19 +243,28 @@ export const MatchDetailScreen: React.FC = () => {
         {activeTab === 'scorecard' && (
           <View style={styles.tabSection}>
             {/* Over Timeline Live Bar */}
-            {match.status === 'live' && (
-              <View style={styles.overTimelineBar}>
-                <View style={styles.overMetaRow}>
-                  <Text style={styles.overMetaTitle}>
-                    Over {Math.floor(match.team2.overs) + 1} Live • {match.activeBowler.name}
-                  </Text>
-                  <Text style={styles.overRunsCount}>
-                    {match.recentBalls.slice(-6).join(' • ') || 'Ready'}
-                  </Text>
+            {match.status === 'live' && (() => {
+              const activeBatTeam = match.currentInnings === 2 ? match.team2 : match.team1;
+              const maxOvs = activeBatTeam.maxOvers || match.team1.maxOvers || 20;
+              const legalBalls = oversToBalls(activeBatTeam.overs || 0);
+              const maxBalls = maxOvs * 6;
+              const currentOverNum = Math.min(maxOvs, Math.floor(legalBalls / 6) + 1);
+              if (legalBalls >= maxBalls) return null;
+
+              return (
+                <View style={styles.overTimelineBar}>
+                  <View style={styles.overMetaRow}>
+                    <Text style={styles.overMetaTitle}>
+                      Over {currentOverNum} Live • {match.activeBowler.name}
+                    </Text>
+                    <Text style={styles.overRunsCount}>
+                      {match.recentBalls.slice(-6).join(' • ') || 'Ready'}
+                    </Text>
+                  </View>
+                  <RecentBallsRibbon balls={match.recentBalls} label="" size="sm" />
                 </View>
-                <RecentBallsRibbon balls={match.recentBalls} label="" size="sm" />
-              </View>
-            )}
+              );
+            })()}
 
             {/* Innings Selector Segment ([ AFG (1st Inn) ] [ IND (2nd Inn) ]) */}
             <View style={styles.inningsSwitchRow}>

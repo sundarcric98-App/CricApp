@@ -65,10 +65,12 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({ visible, onClose }) => {
               }}
               style={styles.profileAvatar}
             />
-            <Text style={styles.userName}>{currentUser?.name || 'Sundar'}</Text>
-            <View style={styles.userIdBadge}>
-              <Text style={styles.userIdText}>ID: {currentUser?.userCode || 'SUND4821'}</Text>
-            </View>
+            <Text style={styles.userName}>{currentUser?.name || 'Player'}</Text>
+            {currentUser?.userCode ? (
+              <View style={styles.userIdBadge}>
+                <Text style={styles.userIdText}>ID: {currentUser.userCode}</Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Menu Items List */}

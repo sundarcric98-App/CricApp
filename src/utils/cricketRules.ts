@@ -1,4 +1,4 @@
-import { BallEvent, BallEventPayload, BallType, Match, Scorecard } from '../types/cricket';
+import { BallEvent, BallEventPayload, BallType, Match, PlayerBatting, PlayerBowling, Scorecard } from '../types/cricket';
 
 /**
  * Converts legal balls count to cricket overs notation string (e.g., 110 -> 18.2)
@@ -152,6 +152,9 @@ export function applyBallToMatch(
   updatedScorecard: Scorecard;
   ballEvent: BallEvent;
   isOverFinished: boolean;
+  isFirstInningsFinished?: boolean;
+  isMatchFinished?: boolean;
+  matchResult?: string;
 } {
   const isWide = payload.ballType === 'wide';
   const isNoBall = payload.ballType === 'noBall';
@@ -211,8 +214,56 @@ export function applyBallToMatch(
   battingTeam.overs = newOvers;
 
   // Active striker & non-striker
-  let striker = { ...currentMatch.activeBatters.striker };
-  let nonStriker = { ...currentMatch.activeBatters.nonStriker };
+  let striker: PlayerBatting = currentMatch.activeBatters?.striker
+    ? { ...currentMatch.activeBatters.striker }
+    : {
+        playerId: `p_striker_${currentMatch.id}`,
+        name: `${battingTeam.name} Opener 1`,
+        shortName: 'Opener 1',
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        strikeRate: 0,
+        isStriker: true,
+        isNonStriker: false,
+        isOut: false,
+      };
+
+  let nonStriker: PlayerBatting = currentMatch.activeBatters?.nonStriker
+    ? { ...currentMatch.activeBatters.nonStriker }
+    : {
+        playerId: `p_nonstriker_${currentMatch.id}`,
+        name: `${battingTeam.name} Opener 2`,
+        shortName: 'Opener 2',
+        runs: 0,
+        balls: 0,
+        fours: 0,
+        sixes: 0,
+        strikeRate: 0,
+        isStriker: false,
+        isNonStriker: true,
+        isOut: false,
+      };
+
+  // Active Bowler stats
+  const bowler: PlayerBowling = currentMatch.activeBowler
+    ? { ...currentMatch.activeBowler }
+    : {
+        playerId: `p_bowler_${currentMatch.id}`,
+        name: `${bowlingTeam.name} Bowler 1`,
+        shortName: 'Bowler 1',
+        overs: 0,
+        oversInBalls: 0,
+        maidens: 0,
+        runs: 0,
+        wickets: 0,
+        economy: 0,
+        dots: 0,
+        wides: 0,
+        noBalls: 0,
+        isCurrentBowler: true,
+      };
 
   // Update striker stats
   striker.runs += batRuns;
@@ -226,11 +277,8 @@ export function applyBallToMatch(
 
   if (isWicket) {
     striker.isOut = true;
-    striker.dismissalInfo = payload.wicketType ? `b ${currentMatch.activeBowler.name} (${payload.wicketType})` : `c & b ${currentMatch.activeBowler.name}`;
+    striker.dismissalInfo = payload.wicketType ? `b ${bowler.name} (${payload.wicketType})` : `c & b ${bowler.name}`;
   }
-
-  // Active Bowler stats
-  const bowler = { ...currentMatch.activeBowler };
   // Bowler concedes: totalRuns on normal, no-balls, and wides. (Byes and Leg-Byes do NOT concede bowler runs).
   const bowlerConcededRuns = (isBye || isLegBye) ? 0 : totalRuns;
   bowler.runs += bowlerConcededRuns;
@@ -330,18 +378,50 @@ export function applyBallToMatch(
     timestamp: new Date().toISOString(),
   };
 
-  // Run equations
+  // Run equations & Innings Transition Logic (Dynamic Max Wickets based on Squad Size & Single Wicket Rule)
+  const maxOvers = battingTeam.maxOvers || 20;
+  const maxBalls = maxOvers * 6;
   const crr = calculateCRR(newTeamScore, newLegalBalls);
   let rrr = currentMatch.rrr;
   let equation = currentMatch.equation;
+  let isFirstInningsFinished = false;
+  let isMatchFinished = false;
+  let matchResult: string | undefined = undefined;
+  let target = currentMatch.target;
 
-  if (currentMatch.currentInnings === 2 && currentMatch.target) {
-    const runsNeeded = currentMatch.target - newTeamScore;
-    const maxBalls = (battingTeam.maxOvers || 20) * 6;
+  const playersPerTeam = currentMatch.playersPerTeam || 11;
+  const allowSingleWicket = Boolean(currentMatch.allowSingleWicket);
+  const maxWickets = currentMatch.maxWickets || (allowSingleWicket ? playersPerTeam : Math.max(1, playersPerTeam - 1));
+
+  if (currentMatch.currentInnings === 1) {
+    if (newLegalBalls >= maxBalls || newTeamWickets >= maxWickets) {
+      isFirstInningsFinished = true;
+      target = newTeamScore + 1;
+      equation = `Target: ${target} (${bowlingTeam.shortName} need ${target} runs in ${maxOvers} overs)`;
+    } else {
+      equation = `CRR: ${crr.toFixed(2)}`;
+    }
+  } else if (currentMatch.currentInnings === 2) {
+    const effectiveTarget = target || (currentScorecard?.innings1 ? currentScorecard.innings1.score + 1 : newTeamScore + 1);
+    target = effectiveTarget;
+    const runsNeeded = effectiveTarget - newTeamScore;
     const remainingBalls = Math.max(0, maxBalls - newLegalBalls);
-    rrr = calculateRRR(currentMatch.target, newTeamScore, remainingBalls);
+    rrr = calculateRRR(effectiveTarget, newTeamScore, remainingBalls);
+
     if (runsNeeded <= 0) {
-      equation = `${battingTeam.shortName} won by ${10 - newTeamWickets} wickets`;
+      isMatchFinished = true;
+      const wicketsLeft = Math.max(0, maxWickets - newTeamWickets);
+      matchResult = `${battingTeam.shortName} won by ${wicketsLeft} wicket${wicketsLeft === 1 ? '' : 's'}`;
+      equation = matchResult;
+    } else if (newLegalBalls >= maxBalls || newTeamWickets >= maxWickets) {
+      isMatchFinished = true;
+      if (newTeamScore === effectiveTarget - 1) {
+        matchResult = 'Match Tied';
+      } else {
+        const diff = (effectiveTarget - 1) - newTeamScore;
+        matchResult = `${bowlingTeam.shortName} won by ${diff} run${diff === 1 ? '' : 's'}`;
+      }
+      equation = matchResult;
     } else {
       equation = `Need ${runsNeeded} runs in ${remainingBalls} balls`;
     }
@@ -353,7 +433,13 @@ export function applyBallToMatch(
     team2: isTeam1Batting ? bowlingTeam : battingTeam,
     crr,
     rrr,
+    target,
     equation,
+    status: isMatchFinished ? 'completed' : currentMatch.status,
+    result: matchResult || currentMatch.result,
+    winnerTeamId: isMatchFinished
+      ? (matchResult?.includes(battingTeam.shortName) ? battingTeam.id : (matchResult?.includes(bowlingTeam.shortName) ? bowlingTeam.id : undefined))
+      : currentMatch.winnerTeamId,
     recentBalls: updatedRecentBalls,
     activeBatters: {
       striker: nextStriker,
@@ -446,5 +532,8 @@ export function applyBallToMatch(
     updatedScorecard: baseScorecard,
     ballEvent,
     isOverFinished,
+    isFirstInningsFinished,
+    isMatchFinished,
+    matchResult,
   };
 }

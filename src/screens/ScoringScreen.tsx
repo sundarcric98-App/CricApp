@@ -46,9 +46,18 @@ export const ScoringScreen: React.FC = () => {
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [showRetireModal, setShowRetireModal] = useState(false);
   const [showEndMatchModal, setShowEndMatchModal] = useState(false);
+  const [showInningsBreakModal, setShowInningsBreakModal] = useState(false);
+  const [showMatchFinishedModal, setShowMatchFinishedModal] = useState(false);
   const [customPlayerName, setCustomPlayerName] = useState('');
   const [customBowlerName, setCustomBowlerName] = useState('');
-  const [bowlingSquad, setBowlingSquad] = useState<Player[]>([]);
+  const [chasingStrikerName, setChasingStrikerName] = useState('');
+  const [chasingNonStrikerName, setChasingNonStrikerName] = useState('');
+  const [chasingBowlerName, setChasingBowlerName] = useState('');
+  const [selectedStrikerPlayer, setSelectedStrikerPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [selectedNonStrikerPlayer, setSelectedNonStrikerPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [selectedBowlerPlayer, setSelectedBowlerPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [team1Squad, setTeam1Squad] = useState<Player[]>([]);
+  const [team2Squad, setTeam2Squad] = useState<Player[]>([]);
   const [manOfTheMatchName, setManOfTheMatchName] = useState('');
   const [selectedWinnerId, setSelectedWinnerId] = useState<string>('');
 
@@ -58,34 +67,9 @@ export const ScoringScreen: React.FC = () => {
     }
   }, [dispatch, matchId]);
 
-  if (!currentMatch) {
-    return (
-      <View style={styles.container}>
-        <Header showBack title="Live Scoring Console" onBackPress={() => router.replace('/(tabs)' as any)} />
-        <View style={styles.centerBox}>
-          {loading ? (
-            <>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.loadingText}>
-                Loading scoring console...
-              </Text>
-            </>
-          ) : (
-            <EmptyState
-              title="Match Ready"
-              description="Initializing match scoring console..."
-              actionLabel="Return to Matches"
-              onAction={() => router.replace('/(tabs)' as any)}
-            />
-          )}
-        </View>
-      </View>
-    );
-  }
-
   const match = currentMatch;
 
-  const team1 = match.team1 || {
+  const team1 = match?.team1 || {
     id: 'team_a',
     name: 'Team 1',
     shortName: 'TM1',
@@ -94,7 +78,7 @@ export const ScoringScreen: React.FC = () => {
     overs: 0,
     maxOvers: 20,
   };
-  const team2 = match.team2 || {
+  const team2 = match?.team2 || {
     id: 'team_b',
     name: 'Team 2',
     shortName: 'TM2',
@@ -104,247 +88,95 @@ export const ScoringScreen: React.FC = () => {
     maxOvers: 20,
   };
 
-  const isTeam1Batting = match.battingTeamId ? match.battingTeamId === team1.id : true;
+  const isTeam1Batting = match?.battingTeamId ? match.battingTeamId === team1.id : true;
   const battingTeam = isTeam1Batting ? team1 : team2;
   const bowlingTeam = isTeam1Batting ? team2 : team1;
   const activeBowlingTeamId = bowlingTeam?.id;
   const activeBowlingTeamName = bowlingTeam?.name || 'Bowling Team';
 
-  const striker: PlayerBatting = match.activeBatters?.striker || {
-    playerId: `p_striker_${match.id}`,
-    name: `${battingTeam.name} Opener 1`,
-    shortName: 'Opener 1',
-    runs: 0,
-    balls: 0,
-    fours: 0,
-    sixes: 0,
-    strikeRate: 0,
-    isStriker: true,
-    isNonStriker: false,
-    isOut: false,
-  };
+  const currentInn = match?.currentInnings === 2 ? scorecard?.innings2 : scorecard?.innings1;
 
-  const nonStriker: PlayerBatting = match.activeBatters?.nonStriker || {
-    playerId: `p_nonstriker_${match.id}`,
-    name: `${battingTeam.name} Opener 2`,
-    shortName: 'Opener 2',
-    runs: 0,
-    balls: 0,
-    fours: 0,
-    sixes: 0,
-    strikeRate: 0,
-    isStriker: false,
-    isNonStriker: true,
-    isOut: false,
-  };
-
-  const activeBowler: PlayerBowling = match.activeBowler || {
-    playerId: `p_bowler_${match.id}`,
-    name: `${bowlingTeam.name} Bowler 1`,
-    shortName: 'Bowler 1',
-    overs: 0,
-    oversInBalls: 0,
-    maidens: 0,
-    runs: 0,
-    wickets: 0,
-    economy: 0,
-    dots: 0,
-    wides: 0,
-    noBalls: 0,
-    isCurrentBowler: true,
-  };
-
-  // Fetch current bowling team players
-  useEffect(() => {
-    if (activeBowlingTeamId) {
-      cricketApi
-        .getTeamById(activeBowlingTeamId)
-        .then((res) => {
-          setBowlingSquad(res.players || []);
-        })
-        .catch(() => setBowlingSquad([]));
-    }
-  }, [activeBowlingTeamId]);
-
-  const handleScoreBall = (
-    ballType: BallType,
-    runs: number,
-    isExtra: boolean = false,
-    isWicket: boolean = false,
-    wicketType?: WicketType
-  ) => {
-    // 1. Snapshot current state for Undo
-    if (scorecard) {
-      dispatch(pushUndoSnapshot({ match, scorecard }));
-    }
-
-    // 2. Dispatch optimistic async thunk
-    dispatch(setIsSubmitting(true));
-    dispatch(
-      submitBallEvent({
-        matchId: match.id,
-        payload: {
-          matchId: match.id,
-          ballType,
-          runs,
-          isExtra,
-          isWicket,
-          wicketType,
-          strikerId: striker.playerId,
-          nonStrikerId: nonStriker.playerId,
-          bowlerId: activeBowler.playerId,
-        },
-      })
-    )
-      .unwrap()
-      .then((result: any) => {
-        if (result?.match) {
-          const updated = result.match;
-          const activeBatting =
-            updated.battingTeamId === updated.team1?.id ? updated.team1 : updated.team2;
-          const legalBalls = oversToBalls(activeBatting?.overs || 0);
-          const maxBalls = (activeBatting?.maxOvers || 20) * 6;
-
-          // Once 6 legal balls bowled in the over, automatically show remaining players for change bowler
-          if (
-            legalBalls > 0 &&
-            legalBalls % 6 === 0 &&
-            legalBalls < maxBalls &&
-            updated.status === 'live'
-          ) {
-            setTimeout(() => {
-              dispatch(setShowBowlerModal(true));
-            }, 350);
-          }
-        }
-      })
-      .catch((err) => {
-        console.warn('submitBallEvent error:', err);
-      })
-      .finally(() => {
-        dispatch(setIsSubmitting(false));
-      });
-  };
-
-  const handleUndo = () => {
-    if (undoStack.length === 0) {
-      Alert.alert('Undo', 'No previous ball snapshots in current session.');
-      return;
-    }
-    const previousSnapshot = undoStack[undoStack.length - 1];
-    dispatch(popUndoSnapshot());
-
-    if (previousSnapshot) {
-      dispatch({
-        type: 'matches/handleRealtimeScoreUpdate',
-        payload: { match: previousSnapshot.match },
-      });
-    }
-  };
-
-  const handleSwitchStrike = () => {
-    const s = striker;
-    const ns = nonStriker;
-
-    const updatedMatch = {
-      ...match,
-      activeBatters: {
-        striker: { ...ns, isStriker: true, isNonStriker: false },
-        nonStriker: { ...s, isStriker: false, isNonStriker: true },
-      },
+  const striker: PlayerBatting =
+    match?.activeBatters?.striker ||
+    currentInn?.batting?.[0] || {
+      playerId: `p_striker_${match?.id || 'default'}`,
+      name: `${battingTeam.name} Opener 1`,
+      shortName: 'Opener 1',
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      strikeRate: 0,
+      isStriker: true,
+      isNonStriker: false,
+      isOut: false,
     };
 
-    dispatch({
-      type: 'matches/handleRealtimeScoreUpdate',
-      payload: { match: updatedMatch },
-    });
-  };
+  const nonStriker: PlayerBatting =
+    match?.activeBatters?.nonStriker ||
+    currentInn?.batting?.[1] || {
+      playerId: `p_nonstriker_${match?.id || 'default'}`,
+      name: `${battingTeam.name} Opener 2`,
+      shortName: 'Opener 2',
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      strikeRate: 0,
+      isStriker: false,
+      isNonStriker: true,
+      isOut: false,
+    };
 
-  const handleEndOver = () => {
-    Alert.alert(
-      'End Over',
-      'Do you want to switch bowler and rotate striker for the new over?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm & Change Bowler',
-          onPress: () => {
-            handleSwitchStrike();
-            dispatch(setShowBowlerModal(true));
-          },
-        },
-      ]
-    );
-  };
+  const activeBowler: PlayerBowling =
+    match?.activeBowler ||
+    currentInn?.bowling?.find((b) => b && b.isCurrentBowler) ||
+    currentInn?.bowling?.[0] || {
+      playerId: `p_bowler_${match?.id || 'default'}`,
+      name: `${bowlingTeam.name} Bowler 1`,
+      shortName: 'Bowler 1',
+      overs: 0,
+      oversInBalls: 0,
+      maidens: 0,
+      runs: 0,
+      wickets: 0,
+      economy: 0,
+      dots: 0,
+      wides: 0,
+      noBalls: 0,
+      isCurrentBowler: true,
+    };
 
-  const handleConfirmWicket = () => {
-    dispatch(setShowWicketModal(false));
-    handleScoreBall('wicket', 0, false, true, selectedWicketType);
-    setShowNewBatsmanModal(true);
-  };
-
-  const handleAddNewBatsman = () => {
-    if (!customPlayerName.trim()) {
-      Alert.alert('Required', 'Please enter player name.');
-      return;
+  // Fetch squad players for both teams
+  useEffect(() => {
+    if (team1?.id && team1.id !== 'team_a') {
+      cricketApi
+        .getTeamById(team1.id)
+        .then((res) => {
+          setTeam1Squad(res.players || []);
+        })
+        .catch(() => setTeam1Squad([]));
     }
-    cricketApi.selectNewBatsman(match.id, customPlayerName.trim()).then((updated) => {
-      dispatch({
-        type: 'matches/handleRealtimeScoreUpdate',
-        payload: { match: updated },
-      });
-      setCustomPlayerName('');
-      setShowNewBatsmanModal(false);
-    });
-  };
-
-  const handleRetireConfirm = (isStriker: boolean) => {
-    if (!customPlayerName.trim()) {
-      Alert.alert('Required', 'Please enter new batsman name.');
-      return;
+    if (team2?.id && team2.id !== 'team_b') {
+      cricketApi
+        .getTeamById(team2.id)
+        .then((res) => {
+          setTeam2Squad(res.players || []);
+        })
+        .catch(() => setTeam2Squad([]));
     }
-    cricketApi.retireBatsman(match.id, isStriker, customPlayerName.trim()).then((updated) => {
-      dispatch({
-        type: 'matches/handleRealtimeScoreUpdate',
-        payload: { match: updated },
-      });
-      setCustomPlayerName('');
-      setShowRetireModal(false);
-    });
-  };
+  }, [team1?.id, team2?.id]);
 
-  const handleCompleteMatch = async () => {
-    const winnerId = selectedWinnerId || team1.id;
-    try {
-      const updated = await cricketApi.completeMatch(
-        match.id,
-        winnerId,
-        manOfTheMatchName || undefined
-      );
-      dispatch({
-        type: 'matches/handleRealtimeScoreUpdate',
-        payload: { match: updated },
-      });
-      setShowEndMatchModal(false);
-      Alert.alert('Match Completed!', 'Match result & points have been updated.', [
-        {
-          text: 'View Match Summary',
-          onPress: () => router.replace(`/match/${match.id}` as any),
-        },
-      ]);
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to complete match');
-    }
-  };
+  const bowlingSquad = isTeam1Batting ? team2Squad : team1Squad;
 
   // Dynamic bowlers list from current bowling team squad + current innings bowling stats
   const currentInningsBowling =
-    match.currentInnings === 2
+    match?.currentInnings === 2
       ? (scorecard?.innings2?.bowling || [])
       : (scorecard?.innings1?.bowling || []);
 
   const bowlingPlayingXI =
-    isTeam1Batting ? (match.playingXI?.team2 || []) : (match.playingXI?.team1 || []);
+    isTeam1Batting ? (match?.playingXI?.team2 || []) : (match?.playingXI?.team1 || []);
 
   const bowlersList = useMemo(() => {
     const list: {
@@ -433,7 +265,369 @@ export const ScoringScreen: React.FC = () => {
     return list;
   }, [bowlingSquad, bowlingPlayingXI, currentInningsBowling, activeBowler]);
 
+  // Squad and playing XI for 2nd innings lineup selection
+  const chasingSquadRaw = isTeam1Batting ? team2Squad : team1Squad;
+  const chasingPlayingXI = isTeam1Batting ? (match?.playingXI?.team2 || []) : (match?.playingXI?.team1 || []);
+
+  const chasingTeamPlayers = useMemo(() => {
+    const list: { id: string; name: string }[] = [];
+    for (const p of chasingSquadRaw) {
+      if (p && p.name && !list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+        list.push({ id: p.id, name: p.name });
+      }
+    }
+    for (const p of chasingPlayingXI) {
+      if (p && p.name && !list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+        list.push({ id: p.id, name: p.name });
+      }
+    }
+    if (list.length === 0) {
+      list.push(
+        { id: `c_p1_${Date.now()}`, name: `${bowlingTeam.name} Opener 1` },
+        { id: `c_p2_${Date.now()}`, name: `${bowlingTeam.name} Opener 2` },
+        { id: `c_p3_${Date.now()}`, name: `${bowlingTeam.name} Batter 3` },
+        { id: `c_p4_${Date.now()}`, name: `${bowlingTeam.name} Batter 4` }
+      );
+    }
+    return list;
+  }, [chasingSquadRaw, chasingPlayingXI, bowlingTeam.name]);
+
+  const defendingSquadRaw = isTeam1Batting ? team1Squad : team2Squad;
+  const defendingPlayingXI = isTeam1Batting ? (match?.playingXI?.team1 || []) : (match?.playingXI?.team2 || []);
+
+  const defendingTeamPlayers = useMemo(() => {
+    const list: { id: string; name: string }[] = [];
+    for (const p of defendingSquadRaw) {
+      if (p && p.name && !list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+        list.push({ id: p.id, name: p.name });
+      }
+    }
+    for (const p of defendingPlayingXI) {
+      if (p && p.name && !list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+        list.push({ id: p.id, name: p.name });
+      }
+    }
+    if (list.length === 0) {
+      list.push(
+        { id: `d_p1_${Date.now()}`, name: `${battingTeam.name} Bowler 1` },
+        { id: `d_p2_${Date.now()}`, name: `${battingTeam.name} Bowler 2` },
+        { id: `d_p3_${Date.now()}`, name: `${battingTeam.name} Bowler 3` }
+      );
+    }
+    return list;
+  }, [defendingSquadRaw, defendingPlayingXI, battingTeam.name]);
+
+  // Remaining squad players of current batting team who haven't batted in this innings
+  const currentInningsBatting = match?.currentInnings === 2 ? (scorecard?.innings2?.batting || []) : (scorecard?.innings1?.batting || []);
+  const activeBattingSquad = isTeam1Batting ? team1Squad : team2Squad;
+  const activeBattingPlayingXI = isTeam1Batting ? (match?.playingXI?.team1 || []) : (match?.playingXI?.team2 || []);
+
+  const availableNewBatsmen = useMemo(() => {
+    const battedNames = currentInningsBatting.map((b) => b.name?.trim().toLowerCase());
+    const battedIds = currentInningsBatting.map((b) => b.playerId);
+    const list: { id: string; name: string }[] = [];
+
+    for (const p of activeBattingSquad) {
+      if (p && p.name && !battedNames.includes(p.name.trim().toLowerCase()) && !battedIds.includes(p.id)) {
+        if (!list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+          list.push({ id: p.id, name: p.name });
+        }
+      }
+    }
+
+    for (const p of activeBattingPlayingXI) {
+      if (p && p.name && !battedNames.includes(p.name.trim().toLowerCase()) && !battedIds.includes(p.id)) {
+        if (!list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+          list.push({ id: p.id, name: p.name });
+        }
+      }
+    }
+
+    return list;
+  }, [activeBattingSquad, activeBattingPlayingXI, currentInningsBatting]);
+
+  // Pre-select opening batsmen and opening bowler when innings break modal opens
+  useEffect(() => {
+    if (showInningsBreakModal) {
+      if (!selectedStrikerPlayer && chasingTeamPlayers.length > 0) {
+        setSelectedStrikerPlayer(chasingTeamPlayers[0]);
+      }
+      if (!selectedNonStrikerPlayer && chasingTeamPlayers.length > 1) {
+        setSelectedNonStrikerPlayer(chasingTeamPlayers[1]);
+      } else if (!selectedNonStrikerPlayer && chasingTeamPlayers.length === 1) {
+        setSelectedNonStrikerPlayer(chasingTeamPlayers[0]);
+      }
+      if (!selectedBowlerPlayer && defendingTeamPlayers.length > 0) {
+        setSelectedBowlerPlayer(defendingTeamPlayers[0]);
+      }
+    }
+  }, [showInningsBreakModal, chasingTeamPlayers, defendingTeamPlayers]);
+
+  const handleScoreBall = (
+    ballType: BallType,
+    runs: number,
+    isExtra: boolean = false,
+    isWicket: boolean = false,
+    wicketType?: WicketType
+  ) => {
+    if (!match) return;
+
+    // 1. Snapshot current state for Undo
+    if (scorecard) {
+      dispatch(pushUndoSnapshot({ match, scorecard }));
+    }
+
+    // 2. Dispatch optimistic async thunk
+    dispatch(setIsSubmitting(true));
+    dispatch(
+      submitBallEvent({
+        matchId: match.id,
+        payload: {
+          matchId: match.id,
+          ballType,
+          runs,
+          isExtra,
+          isWicket,
+          wicketType,
+          strikerId: striker.playerId,
+          nonStrikerId: nonStriker.playerId,
+          bowlerId: activeBowler.playerId,
+        },
+      })
+    )
+      .unwrap()
+      .then((result: any) => {
+        if (result?.match) {
+          const updated = result.match;
+          const activeBatting =
+            updated.battingTeamId === updated.team1?.id ? updated.team1 : updated.team2;
+          const legalBalls = oversToBalls(activeBatting?.overs || 0);
+          const maxBalls = (activeBatting?.maxOvers || 20) * 6;
+
+          const playersPerTeam = updated.playersPerTeam || 11;
+          const allowSingleWicket = Boolean(updated.allowSingleWicket);
+          const maxWickets = updated.maxWickets || (allowSingleWicket ? playersPerTeam : Math.max(1, playersPerTeam - 1));
+
+          // 1. Check if match has concluded (target chased in 2nd inn or overs expired/all-out)
+          if (updated.status === 'completed' || result?.isMatchFinished) {
+            setTimeout(() => {
+              setShowMatchFinishedModal(true);
+            }, 400);
+            return;
+          }
+
+          // 2. Check if 1st innings is finished (overs finished or all wickets down)
+          if (
+            updated.currentInnings === 1 &&
+            (legalBalls >= maxBalls || (activeBatting?.wickets || 0) >= maxWickets || result?.isFirstInningsFinished)
+          ) {
+            setTimeout(() => {
+              setShowInningsBreakModal(true);
+            }, 400);
+            return;
+          }
+
+          // 3. Once 6 legal balls bowled in the over, automatically show remaining players for change bowler
+          if (
+            legalBalls > 0 &&
+            legalBalls % 6 === 0 &&
+            legalBalls < maxBalls &&
+            updated.status === 'live'
+          ) {
+            setTimeout(() => {
+              dispatch(setShowBowlerModal(true));
+            }, 350);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('submitBallEvent error:', err);
+      })
+      .finally(() => {
+        dispatch(setIsSubmitting(false));
+      });
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) {
+      Alert.alert('Undo', 'No previous ball snapshots in current session.');
+      return;
+    }
+    const previousSnapshot = undoStack[undoStack.length - 1];
+    dispatch(popUndoSnapshot());
+
+    if (previousSnapshot) {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: previousSnapshot.match },
+      });
+    }
+  };
+
+  const handleSwitchStrike = () => {
+    if (!match) return;
+    const s = striker;
+    const ns = nonStriker;
+
+    const updatedMatch = {
+      ...match,
+      activeBatters: {
+        striker: { ...ns, isStriker: true, isNonStriker: false },
+        nonStriker: { ...s, isStriker: false, isNonStriker: true },
+      },
+    };
+
+    dispatch({
+      type: 'matches/handleRealtimeScoreUpdate',
+      payload: { match: updatedMatch },
+    });
+  };
+
+  const handleEndOver = () => {
+    Alert.alert(
+      'End Over',
+      'Do you want to switch bowler and rotate striker for the new over?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm & Change Bowler',
+          onPress: () => {
+            handleSwitchStrike();
+            dispatch(setShowBowlerModal(true));
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirmWicket = () => {
+    dispatch(setShowWicketModal(false));
+    const activeBatting = isTeam1Batting ? team1 : team2;
+    const playersPerTeam = match?.playersPerTeam || 11;
+    const allowSingleWicket = Boolean(match?.allowSingleWicket);
+    const maxWickets = match?.maxWickets || (allowSingleWicket ? playersPerTeam : Math.max(1, playersPerTeam - 1));
+    const nextWickets = (activeBatting?.wickets || 0) + 1;
+
+    handleScoreBall('wicket', 0, false, true, selectedWicketType);
+
+    // Only prompt for new batsman if team is not all out after this wicket
+    if (nextWickets < maxWickets) {
+      setTimeout(() => {
+        setShowNewBatsmanModal(true);
+      }, 350);
+    }
+  };
+
+  const handleAddNewBatsman = () => {
+    if (!match) return;
+    if (!customPlayerName.trim()) {
+      Alert.alert('Required', 'Please enter player name.');
+      return;
+    }
+    cricketApi.selectNewBatsman(match.id, customPlayerName.trim()).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setCustomPlayerName('');
+      setShowNewBatsmanModal(false);
+    });
+  };
+
+  const handleRetireConfirm = (isStriker: boolean) => {
+    if (!match) return;
+    if (!customPlayerName.trim()) {
+      Alert.alert('Required', 'Please enter new batsman name.');
+      return;
+    }
+    cricketApi.retireBatsman(match.id, isStriker, customPlayerName.trim()).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setCustomPlayerName('');
+      setShowRetireModal(false);
+    });
+  };
+
+  const handleStartSecondInnings = () => {
+    if (!match) return;
+    const finalStrikerName =
+      chasingStrikerName.trim() || selectedStrikerPlayer?.name || `${bowlingTeam.name} Opener 1`;
+    const finalStrikerId = selectedStrikerPlayer?.id || `p_str2_${Date.now()}`;
+
+    const finalNonStrikerName =
+      chasingNonStrikerName.trim() || selectedNonStrikerPlayer?.name || `${bowlingTeam.name} Opener 2`;
+    const finalNonStrikerId = selectedNonStrikerPlayer?.id || `p_nonstr2_${Date.now()}`;
+
+    const finalBowlerName =
+      chasingBowlerName.trim() || selectedBowlerPlayer?.name || `${battingTeam.name} Bowler 1`;
+    const finalBowlerId = selectedBowlerPlayer?.id || `p_bowl2_${Date.now()}`;
+
+    if (finalStrikerName.toLowerCase() === finalNonStrikerName.toLowerCase()) {
+      Alert.alert('Invalid Selection', 'Striker and Non-Striker must be two different players.');
+      return;
+    }
+
+    cricketApi
+      .startSecondInnings(match.id, {
+        strikerName: finalStrikerName,
+        strikerId: finalStrikerId,
+        nonStrikerName: finalNonStrikerName,
+        nonStrikerId: finalNonStrikerId,
+        bowlerName: finalBowlerName,
+        bowlerId: finalBowlerId,
+      })
+      .then((res) => {
+        dispatch({
+          type: 'matches/handleRealtimeScoreUpdate',
+          payload: { match: res.match },
+        });
+        dispatch(fetchMatchDetails(match.id));
+        setShowInningsBreakModal(false);
+        setChasingStrikerName('');
+        setChasingNonStrikerName('');
+        setChasingBowlerName('');
+        setSelectedStrikerPlayer(null);
+        setSelectedNonStrikerPlayer(null);
+        setSelectedBowlerPlayer(null);
+        Alert.alert(
+          '2nd Innings Underway! 🏏',
+          `${res.match.battingTeamId === res.match.team1.id ? res.match.team1.name : res.match.team2.name} need ${res.match.target} runs to win.`
+        );
+      })
+      .catch((err) => {
+        Alert.alert('Error', err.message || 'Failed to start 2nd innings');
+      });
+  };
+
+  const handleCompleteMatch = async () => {
+    if (!match) return;
+    const winnerId = selectedWinnerId || team1.id;
+    try {
+      const updated = await cricketApi.completeMatch(
+        match.id,
+        winnerId,
+        manOfTheMatchName || undefined
+      );
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setShowEndMatchModal(false);
+      Alert.alert('Match Completed!', 'Match result & points have been updated.', [
+        {
+          text: 'View Match Summary',
+          onPress: () => router.replace(`/match/${match.id}` as any),
+        },
+      ]);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to complete match');
+    }
+  };
+
   const handleSelectBowler = (b: { id: string; name: string }) => {
+    if (!match) return;
     cricketApi.changeBowler(match.id, b.name, b.id).then((updated) => {
       dispatch({
         type: 'matches/handleRealtimeScoreUpdate',
@@ -444,6 +638,7 @@ export const ScoringScreen: React.FC = () => {
   };
 
   const handleAddCustomBowler = () => {
+    if (!match) return;
     if (!customBowlerName.trim()) {
       Alert.alert('Required', 'Please enter bowler name.');
       return;
@@ -458,6 +653,31 @@ export const ScoringScreen: React.FC = () => {
       dispatch(setShowBowlerModal(false));
     });
   };
+
+  if (!match) {
+    return (
+      <View style={styles.container}>
+        <Header showBack title="Live Scoring Console" onBackPress={() => router.replace('/(tabs)' as any)} />
+        <View style={styles.centerBox}>
+          {loading ? (
+            <>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>
+                Loading scoring console...
+              </Text>
+            </>
+          ) : (
+            <EmptyState
+              title="Match Ready"
+              description="Initializing match scoring console..."
+              actionLabel="Return to Matches"
+              onAction={() => router.replace('/(tabs)' as any)}
+            />
+          )}
+        </View>
+      </View>
+    );
+  }
 
   const maxOvers = battingTeam?.maxOvers || 20;
   const currentOvers = typeof battingTeam?.overs === 'number' ? battingTeam.overs : 0;
@@ -572,7 +792,7 @@ export const ScoringScreen: React.FC = () => {
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Dismissal Method</Text>
             <Text style={styles.modalSubtitle}>
-              Select dismissal for {match.activeBatters.striker.name}:
+              Select dismissal for {striker.name}:
             </Text>
 
             {(
@@ -629,13 +849,39 @@ export const ScoringScreen: React.FC = () => {
         onRequestClose={() => setShowNewBatsmanModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
+          <View style={[styles.modalBox, { maxHeight: '80%' }]}>
             <Text style={styles.modalTitle}>Select New Batsman</Text>
-            <Text style={styles.modalSubtitle}>Enter incoming batsman name:</Text>
+            <Text style={styles.modalSubtitle}>
+              {battingTeam.name} Squad ({availableNewBatsmen.length} Available):
+            </Text>
 
+            {availableNewBatsmen.length > 0 ? (
+              <View style={[styles.playerChipsContainer, { marginVertical: 6 }]}>
+                {availableNewBatsmen.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.playerChip}
+                    onPress={() => {
+                      cricketApi.selectNewBatsman(match.id, p.name).then((updated) => {
+                        dispatch({
+                          type: 'matches/handleRealtimeScoreUpdate',
+                          payload: { match: updated },
+                        });
+                        setShowNewBatsmanModal(false);
+                      });
+                    }}
+                  >
+                    <Ionicons name="person-outline" size={13} color="#CBD5E1" />
+                    <Text style={styles.playerChipText}>{p.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+
+            <Text style={[styles.modalSubtitle, { marginTop: 6 }]}>Or Enter Custom Name:</Text>
             <TextInput
               style={styles.modalTextInput}
-              placeholder="e.g. Virat Kohli"
+              placeholder="e.g. Next Batter Name"
               placeholderTextColor={Colors.onSurfaceVariant}
               value={customPlayerName}
               onChangeText={setCustomPlayerName}
@@ -676,7 +922,7 @@ export const ScoringScreen: React.FC = () => {
                 onPress={() => handleRetireConfirm(true)}
               >
                 <Text style={styles.retireSelectText}>
-                  Striker: {match.activeBatters.striker.name}
+                  Striker: {striker.name}
                 </Text>
               </TouchableOpacity>
 
@@ -685,7 +931,7 @@ export const ScoringScreen: React.FC = () => {
                 onPress={() => handleRetireConfirm(false)}
               >
                 <Text style={styles.retireSelectText}>
-                  Non-Striker: {match.activeBatters.nonStriker.name}
+                  Non-Striker: {nonStriker.name}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -796,22 +1042,22 @@ export const ScoringScreen: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.wicketOption,
-                  (selectedWinnerId === match.team1.id || !selectedWinnerId) &&
+                  (selectedWinnerId === team1.id || !selectedWinnerId) &&
                     styles.wicketOptionSelected,
                 ]}
-                onPress={() => setSelectedWinnerId(match.team1.id)}
+                onPress={() => setSelectedWinnerId(team1.id)}
               >
-                <Text style={styles.wicketOptionText}>{match.team1.name} Won</Text>
+                <Text style={styles.wicketOptionText}>{team1.name} Won</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
                   styles.wicketOption,
-                  selectedWinnerId === match.team2.id && styles.wicketOptionSelected,
+                  selectedWinnerId === team2.id && styles.wicketOptionSelected,
                 ]}
-                onPress={() => setSelectedWinnerId(match.team2.id)}
+                onPress={() => setSelectedWinnerId(team2.id)}
               >
-                <Text style={styles.wicketOptionText}>{match.team2.name} Won</Text>
+                <Text style={styles.wicketOptionText}>{team2.name} Won</Text>
               </TouchableOpacity>
             </View>
 
@@ -836,6 +1082,347 @@ export const ScoringScreen: React.FC = () => {
                 onPress={handleCompleteMatch}
               >
                 <Text style={styles.modalActionConfirmText}>Finish Match</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Innings Break Modal */}
+      <Modal
+        visible={showInningsBreakModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalBox,
+              {
+                maxHeight: '90%',
+                maxWidth: 400,
+                borderColor: 'rgba(212, 175, 55, 0.4)',
+                borderWidth: 1.5,
+                padding: 16,
+              },
+            ]}
+          >
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10, paddingBottom: 6 }}
+            >
+              <View style={styles.inningsBreakIconWrap}>
+                <Ionicons name="flag" size={26} color="#D4AF37" />
+              </View>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { textAlign: 'center', fontSize: 18, color: '#FFFFFF' },
+                ]}
+              >
+                1st Innings Completed!
+              </Text>
+              <Text
+                style={[styles.modalSubtitle, { textAlign: 'center', color: '#94A3B8' }]}
+              >
+                {battingTeam.name} posted {battingTeam.score}/{battingTeam.wickets} in {battingTeam.overs} overs
+              </Text>
+
+              <View style={styles.targetBannerBox}>
+                <Text style={styles.targetBannerLabel}>TARGET FOR 2ND INNINGS</Text>
+                <Text style={styles.targetBannerScore}>
+                  {match?.target || battingTeam.score + 1} RUNS
+                </Text>
+                <Text style={styles.targetBannerEquation}>
+                  {bowlingTeam.name} need {match?.target || battingTeam.score + 1} runs from{' '}
+                  {bowlingTeam.maxOvers || battingTeam.maxOvers || 20} overs
+                </Text>
+              </View>
+
+              {/* 1. Striker (Chasing Team) */}
+              <View style={styles.lineupSectionCard}>
+                <View style={styles.lineupSectionHeader}>
+                  <View style={styles.roleTagBatting}>
+                    <Ionicons name="flash" size={12} color="#4EDEAA" />
+                    <Text style={styles.roleTagText}>STRIKER (OPENER 1)</Text>
+                  </View>
+                  <Text style={styles.teamTagText}>{bowlingTeam.name}</Text>
+                </View>
+                <Text style={styles.selectLabelHint}>
+                  Select batting opener from {bowlingTeam.name}:
+                </Text>
+
+                <View style={styles.playerChipsContainer}>
+                  {chasingTeamPlayers.map((p) => {
+                    const isSelected =
+                      (selectedStrikerPlayer?.id === p.id ||
+                        selectedStrikerPlayer?.name === p.name) &&
+                      !chasingStrikerName;
+                    return (
+                      <TouchableOpacity
+                        key={`striker_${p.id}`}
+                        style={[
+                          styles.playerChip,
+                          isSelected && styles.playerChipActive,
+                        ]}
+                        onPress={() => {
+                          setSelectedStrikerPlayer({ id: p.id, name: p.name });
+                          setChasingStrikerName('');
+                        }}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'person-outline'}
+                          size={13}
+                          color={isSelected ? '#0F1117' : '#CBD5E1'}
+                        />
+                        <Text
+                          style={[
+                            styles.playerChipText,
+                            isSelected && styles.playerChipTextActive,
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TextInput
+                  style={[
+                    styles.modalTextInputCompact,
+                    chasingStrikerName ? styles.modalTextInputActive : null,
+                  ]}
+                  placeholder="Or type custom striker name"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                  value={chasingStrikerName}
+                  onChangeText={(text) => {
+                    setChasingStrikerName(text);
+                    if (text) setSelectedStrikerPlayer(null);
+                  }}
+                />
+              </View>
+
+              {/* 2. Non-Striker (Chasing Team) */}
+              <View style={styles.lineupSectionCard}>
+                <View style={styles.lineupSectionHeader}>
+                  <View style={styles.roleTagBatting}>
+                    <Ionicons name="shield-checkmark" size={12} color="#4EDEAA" />
+                    <Text style={styles.roleTagText}>NON-STRIKER (OPENER 2)</Text>
+                  </View>
+                  <Text style={styles.teamTagText}>{bowlingTeam.name}</Text>
+                </View>
+                <Text style={styles.selectLabelHint}>
+                  Select partner batsman from {bowlingTeam.name}:
+                </Text>
+
+                <View style={styles.playerChipsContainer}>
+                  {chasingTeamPlayers.map((p) => {
+                    const isStrikerSelected =
+                      (selectedStrikerPlayer?.id === p.id ||
+                        selectedStrikerPlayer?.name === p.name) &&
+                      !chasingStrikerName;
+                    const isSelected =
+                      (selectedNonStrikerPlayer?.id === p.id ||
+                        selectedNonStrikerPlayer?.name === p.name) &&
+                      !chasingNonStrikerName;
+                    return (
+                      <TouchableOpacity
+                        key={`nonstriker_${p.id}`}
+                        disabled={isStrikerSelected}
+                        style={[
+                          styles.playerChip,
+                          isSelected && styles.playerChipActiveSecondary,
+                          isStrikerSelected && {
+                            opacity: 0.35,
+                            backgroundColor: 'rgba(255,255,255,0.02)',
+                          },
+                        ]}
+                        onPress={() => {
+                          setSelectedNonStrikerPlayer({ id: p.id, name: p.name });
+                          setChasingNonStrikerName('');
+                        }}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'person-outline'}
+                          size={13}
+                          color={isSelected ? '#0F1117' : '#CBD5E1'}
+                        />
+                        <Text
+                          style={[
+                            styles.playerChipText,
+                            isSelected && styles.playerChipTextActive,
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TextInput
+                  style={[
+                    styles.modalTextInputCompact,
+                    chasingNonStrikerName ? styles.modalTextInputActive : null,
+                  ]}
+                  placeholder="Or type custom non-striker name"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                  value={chasingNonStrikerName}
+                  onChangeText={(text) => {
+                    setChasingNonStrikerName(text);
+                    if (text) setSelectedNonStrikerPlayer(null);
+                  }}
+                />
+              </View>
+
+              {/* 3. Opening Bowler (Defending Team) */}
+              <View style={styles.lineupSectionCard}>
+                <View style={styles.lineupSectionHeader}>
+                  <View style={styles.roleTagBowling}>
+                    <Ionicons name="baseball" size={12} color="#FFB95F" />
+                    <Text style={[styles.roleTagText, { color: '#FFB95F' }]}>
+                      OPENING BOWLER
+                    </Text>
+                  </View>
+                  <Text style={styles.teamTagText}>{battingTeam.name}</Text>
+                </View>
+                <Text style={styles.selectLabelHint}>
+                  Select opening bowler from {battingTeam.name}:
+                </Text>
+
+                <View style={styles.playerChipsContainer}>
+                  {defendingTeamPlayers.map((p) => {
+                    const isSelected =
+                      (selectedBowlerPlayer?.id === p.id ||
+                        selectedBowlerPlayer?.name === p.name) &&
+                      !chasingBowlerName;
+                    return (
+                      <TouchableOpacity
+                        key={`bowler_${p.id}`}
+                        style={[
+                          styles.playerChip,
+                          isSelected && styles.playerChipActiveBowler,
+                        ]}
+                        onPress={() => {
+                          setSelectedBowlerPlayer({ id: p.id, name: p.name });
+                          setChasingBowlerName('');
+                        }}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'baseball-outline'}
+                          size={13}
+                          color={isSelected ? '#0F1117' : '#CBD5E1'}
+                        />
+                        <Text
+                          style={[
+                            styles.playerChipText,
+                            isSelected && styles.playerChipTextActive,
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TextInput
+                  style={[
+                    styles.modalTextInputCompact,
+                    chasingBowlerName ? styles.modalTextInputActive : null,
+                  ]}
+                  placeholder="Or type custom bowler name"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                  value={chasingBowlerName}
+                  onChangeText={(text) => {
+                    setChasingBowlerName(text);
+                    if (text) setSelectedBowlerPlayer(null);
+                  }}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalActionConfirmBtn,
+                  {
+                    marginTop: 4,
+                    paddingVertical: 14,
+                    backgroundColor: Colors.primary,
+                  },
+                ]}
+                onPress={handleStartSecondInnings}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.modalActionConfirmText,
+                    { fontSize: 14, color: '#0F1117', fontWeight: '900' },
+                  ]}
+                >
+                  START 2ND INNINGS 🏏
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Match Concluded Modal */}
+      <Modal
+        visible={showMatchFinishedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMatchFinishedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { borderColor: 'rgba(78, 222, 163, 0.4)', borderWidth: 1.5 }]}>
+            <View style={[styles.inningsBreakIconWrap, { backgroundColor: 'rgba(78, 222, 163, 0.15)' }]}>
+              <Ionicons name="trophy" size={32} color={Colors.primary} />
+            </View>
+            <Text style={[styles.modalTitle, { textAlign: 'center', fontSize: 19, color: '#FFFFFF' }]}>
+              Match Concluded!
+            </Text>
+            <Text style={[styles.resultBannerText, { textAlign: 'center' }]}>
+              {match?.result || 'Match Completed'}
+            </Text>
+
+            <View style={styles.scoreSummaryBox}>
+              <View style={styles.scoreSummaryRow}>
+                <Text style={styles.summaryTeamName}>{team1.name}</Text>
+                <Text style={styles.summaryScore}>
+                  {team1.score}/{team1.wickets} ({team1.overs} ov)
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.scoreSummaryRow}>
+                <Text style={styles.summaryTeamName}>{team2.name}</Text>
+                <Text style={styles.summaryScore}>
+                  {team2.score}/{team2.wickets} ({team2.overs} ov)
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowMatchFinishedModal(false);
+                  router.replace('/(tabs)/matches' as any);
+                }}
+              >
+                <Text style={styles.modalCancelText}>Matches</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalActionConfirmBtn}
+                onPress={() => {
+                  setShowMatchFinishedModal(false);
+                  router.replace(`/match/${match?.id}` as any);
+                }}
+              >
+                <Text style={styles.modalActionConfirmText}>View Scorecard</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1131,6 +1718,182 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: Colors.primary,
+  },
+  // Innings Break Modal Extra Styles
+  inningsBreakIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 4,
+  },
+  targetBannerBox: {
+    backgroundColor: '#0F1117',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    marginVertical: 4,
+    gap: 3,
+  },
+  targetBannerLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.8,
+  },
+  targetBannerScore: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  targetBannerEquation: {
+    fontSize: 11,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  modalSectionSubhead: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#CBD5E1',
+    textTransform: 'uppercase',
+  },
+  resultBannerText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  scoreSummaryBox: {
+    backgroundColor: '#0F1117',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 8,
+  },
+  scoreSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryTeamName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  summaryScore: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  lineupSectionCard: {
+    backgroundColor: '#0F1117',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 6,
+  },
+  lineupSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  roleTagBatting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(78, 222, 163, 0.15)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  roleTagBowling: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 185, 95, 0.15)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  roleTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4EDEAA',
+    letterSpacing: 0.5,
+  },
+  teamTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  selectLabelHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  playerChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 2,
+  },
+  playerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceContainer,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  playerChipActive: {
+    backgroundColor: '#4EDEAA',
+    borderColor: '#4EDEAA',
+  },
+  playerChipActiveSecondary: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#38BDF8',
+  },
+  playerChipActiveBowler: {
+    backgroundColor: '#FFB95F',
+    borderColor: '#FFB95F',
+  },
+  playerChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E2E8F0',
+  },
+  playerChipTextActive: {
+    color: '#0F1117',
+    fontWeight: '800',
+  },
+  modalTextInputCompact: {
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    color: Colors.onSurface,
+    fontSize: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginTop: 2,
+  },
+  modalTextInputActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(78, 222, 163, 0.05)',
   },
 });
 

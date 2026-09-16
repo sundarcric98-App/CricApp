@@ -184,20 +184,78 @@ export const HomeScreen: React.FC = () => {
           </ScrollView>
         </View>
 
-        {/* Live Matches Carousel / Card */}
+        {/* Matches Carousels / Cards based on status */}
         {loading && matches.length === 0 ? (
           <MatchCardSkeleton />
-        ) : featuredMatch ? (
-          <FeaturedMatchCard match={featuredMatch} />
-        ) : displayedMatches.length > 0 ? (
-          <MatchCard match={displayedMatches[0]} />
+        ) : selectedStatus === 'live' ? (
+          liveMatches.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalSliderContainer}
+            >
+              {liveMatches.map((m) => (
+                <View key={`live_slider_${m.id}`} style={styles.horizontalMatchItem}>
+                  <FeaturedMatchCard match={m} />
+                </View>
+              ))}
+            </ScrollView>
+          ) : liveMatches.length === 1 ? (
+            <FeaturedMatchCard match={liveMatches[0]} />
+          ) : (
+            <EmptyState
+              title="No live matches in progress"
+              description="Start live scoring on a scheduled match or create a new fixture."
+              actionLabel="Create Match"
+              onAction={() => router.push('/match/create' as any)}
+            />
+          )
+        ) : selectedStatus === 'upcoming' ? (
+          upcomingMatches.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalSliderContainer}
+            >
+              {upcomingMatches.map((m) => (
+                <View key={`up_slider_${m.id}`} style={styles.horizontalMatchItem}>
+                  <MatchCard match={m} />
+                </View>
+              ))}
+            </ScrollView>
+          ) : upcomingMatches.length === 1 ? (
+            <MatchCard match={upcomingMatches[0]} />
+          ) : (
+            <EmptyState
+              title="No upcoming matches"
+              description="Schedule a new fixture for your tournament or club."
+              actionLabel="Schedule Match"
+              onAction={() => router.push('/match/create' as any)}
+            />
+          )
         ) : (
-          <EmptyState
-            title={`No ${selectedStatus} matches`}
-            description="Create a new match or start live scoring right away."
-            actionLabel="Create Match"
-            onAction={() => router.push('/match/create' as any)}
-          />
+          completedMatches.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalSliderContainer}
+            >
+              {completedMatches.map((m) => (
+                <View key={`comp_slider_${m.id}`} style={styles.horizontalMatchItem}>
+                  <MatchCard match={m} />
+                </View>
+              ))}
+            </ScrollView>
+          ) : completedMatches.length === 1 ? (
+            <MatchCard match={completedMatches[0]} />
+          ) : (
+            <EmptyState
+              title="No completed matches"
+              description="Finished fixtures with scorecards and results will appear here."
+              actionLabel="Create Match"
+              onAction={() => router.push('/match/create' as any)}
+            />
+          )
         )}
 
         {/* Profile Card Section */}
@@ -225,10 +283,12 @@ export const HomeScreen: React.FC = () => {
           {/* Right: Stats Section */}
           <View style={styles.profileStatsBox}>
             <View style={styles.profileNameRow}>
-              <Text style={styles.profileNameText}>{currentUser?.name || 'Sundar'}</Text>
-              <View style={styles.profileCodeBadge}>
-                <Text style={styles.profileCodeBadgeText}>{currentUser?.userCode || 'SUND4821'}</Text>
-              </View>
+              <Text style={styles.profileNameText}>{currentUser?.name || 'Player'}</Text>
+              {currentUser?.userCode ? (
+                <View style={styles.profileCodeBadge}>
+                  <Text style={styles.profileCodeBadgeText}>{currentUser.userCode}</Text>
+                </View>
+              ) : null}
             </View>
             <View style={styles.profileDivider} />
 
@@ -269,10 +329,55 @@ export const HomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {latestTournament ? (
+        {tournaments.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalSliderContainer}
+          >
+            {tournaments.map((t) => (
+              <TouchableOpacity
+                key={`tour_slider_${t.id}`}
+                style={styles.tournamentCarouselCard}
+                onPress={() => router.push(`/tournament/${t.id}` as any)}
+                activeOpacity={0.9}
+              >
+                <Image
+                  source={{
+                    uri:
+                      t.bannerUrl ||
+                      'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
+                  }}
+                  style={styles.tournamentBannerImg}
+                />
+                <View style={styles.bannerOverlay}>
+                  <View style={styles.bannerTagRow}>
+                    <View style={styles.seasonTag}>
+                      <Text style={styles.seasonTagText}>{t.season || '2026'}</Text>
+                    </View>
+                    <View style={styles.teamsLimitTag}>
+                      <Text style={styles.teamsLimitTagText}>{t.ballType || 'LEATHER BALL'}</Text>
+                    </View>
+                    <View style={[styles.teamsLimitTag, { backgroundColor: 'rgba(0, 105, 92, 0.7)' }]}>
+                      <Text style={styles.teamsLimitTagText}>{t.overs ? `${t.overs} Ov` : 'T20'}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.bannerTournamentTitle} numberOfLines={1}>
+                    {t.name}
+                  </Text>
+                  <Text style={styles.bannerDateText} numberOfLines={1}>
+                    {t.startDate ? `${t.startDate} • ` : ''}
+                    {t.clubName || t.city || 'Championship'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : latestTournament ? (
           <TouchableOpacity
             style={styles.tournamentBannerCard}
-            onPress={() => router.push('/(tabs)/tournament' as any)}
+            onPress={() => router.push(`/tournament/${latestTournament.id}` as any)}
             activeOpacity={0.9}
           >
             <Image
@@ -290,6 +395,11 @@ export const HomeScreen: React.FC = () => {
                 </View>
                 <View style={styles.teamsLimitTag}>
                   <Text style={styles.teamsLimitTagText}>{latestTournament.ballType || 'LEATHER BALL'}</Text>
+                </View>
+                <View style={[styles.teamsLimitTag, { backgroundColor: 'rgba(0, 105, 92, 0.7)' }]}>
+                  <Text style={styles.teamsLimitTagText}>
+                    {latestTournament.overs ? `${latestTournament.overs} Overs` : 'T20'}
+                  </Text>
                 </View>
               </View>
 
@@ -317,16 +427,6 @@ export const HomeScreen: React.FC = () => {
               <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </View>
           </TouchableOpacity>
-        )}
-
-        {/* Secondary matches if any */}
-        {secondaryMatches.length > 1 && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={styles.sectionTitleSmall}>Other Matches</Text>
-            {secondaryMatches.slice(1).map((m) => (
-              <MatchCard key={m.id} match={m} />
-            ))}
-          </View>
         )}
       </ScrollView>
     </View>
@@ -505,6 +605,22 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     marginTop: 2,
+  },
+  // Horizontal Sliders
+  horizontalSliderContainer: {
+    paddingRight: 16,
+    gap: 12,
+  },
+  horizontalMatchItem: {
+    width: 320,
+  },
+  tournamentCarouselCard: {
+    width: 300,
+    height: 190,
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#0F172A',
   },
   // Tournaments Banner
   tournamentBannerCard: {

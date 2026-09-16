@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import cricketApi, { setAuthToken, validateAuthToken } from '../services/api';
 import { User } from '../types/cricket';
+import { clearSession, getStoredToken, getStoredUser, saveSession } from '../utils/storage';
 
 interface AuthState {
   currentUser: User | null;
@@ -15,17 +16,18 @@ interface AuthState {
   lastRegisteredPlayerCode: string | null;
 }
 
+// Read previously persisted user and token from storage
+const savedUser = getStoredUser();
+const savedToken = getStoredToken();
+
+if (savedToken) {
+  setAuthToken(savedToken);
+}
+
 const initialState: AuthState = {
-  // Default demo user based on reference screens: Sundar
-  currentUser: {
-    id: 'user_sundar_01',
-    name: 'Sundar',
-    mobile: '+919876543210',
-    userCode: 'SUND4821',
-    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
-  },
-  token: 'mock_jwt_token_criclivex',
-  isAuthenticated: true,
+  currentUser: savedUser,
+  token: savedToken,
+  isAuthenticated: !!(savedUser && savedToken),
   loading: false,
   error: null,
   otpSent: false,
@@ -169,8 +171,9 @@ export const authSlice = createSlice({
       state.devOtp = null;
       state.isNewUser = false;
       state.lastRegisteredPlayerCode = null;
-      // Clear token from HTTP client headers
+      // Clear token from HTTP client headers and local storage
       setAuthToken(null);
+      clearSession();
     },
     clearAuthError: (state) => {
       state.error = null;
@@ -178,11 +181,17 @@ export const authSlice = createSlice({
     updateUserProfile: (state, action: PayloadAction<Partial<User>>) => {
       if (state.currentUser) {
         state.currentUser = { ...state.currentUser, ...action.payload };
+        if (state.token) {
+          saveSession(state.currentUser, state.token);
+        }
       }
     },
     setCurrentUser: (state, action: PayloadAction<User>) => {
       state.currentUser = action.payload;
       state.isAuthenticated = true;
+      if (state.token) {
+        saveSession(action.payload, state.token);
+      }
     },
   },
   extraReducers: (builder) => {
@@ -213,6 +222,7 @@ export const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         setAuthToken(action.payload.token);
+        saveSession(action.payload.user, action.payload.token);
       })
       .addCase(signIn.rejected, (state, action) => {
         state.loading = false;
@@ -225,6 +235,7 @@ export const authSlice = createSlice({
         state.currentUser = null;
         state.token = null;
         state.isAuthenticated = false;
+        clearSession();
       });
 
     // Send OTP
@@ -258,6 +269,7 @@ export const authSlice = createSlice({
           state.token = action.payload.token;
           state.isAuthenticated = true;
           setAuthToken(action.payload.token);
+          saveSession(action.payload.user, action.payload.token);
         } else {
           state.isNewUser = true;
         }
@@ -279,6 +291,7 @@ export const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         setAuthToken(action.payload.token);
+        saveSession(action.payload.user, action.payload.token);
       })
       .addCase(completeSignup.rejected, (state, action) => {
         state.loading = false;
@@ -297,6 +310,7 @@ export const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         setAuthToken(action.payload.token);
+        saveSession(action.payload.user, action.payload.token);
       })
       .addCase(loginWithPin.rejected, (state, action) => {
         state.loading = false;

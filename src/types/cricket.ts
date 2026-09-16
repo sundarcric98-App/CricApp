@@ -62,6 +62,60 @@ export interface PlayerBowling {
   isCurrentBowler: boolean;
 }
 
+export interface FormatBattingStats {
+  matches: number;
+  innings: number;
+  runs: number;
+  balls: number;
+  highest: string | number;
+  average: number;
+  strikeRate: number;
+  fours?: number;
+  sixes?: number;
+  fifties?: number;
+  hundreds?: number;
+}
+
+export interface FormatBowlingStats {
+  matches: number;
+  innings: number;
+  balls: number;
+  runs: number;
+  maidens: number;
+  wickets: number;
+  average: number;
+  economy: number;
+  strikeRate?: number;
+  fourWickets?: number;
+  fiveWickets?: number;
+}
+
+export interface MatchBattingForm {
+  score: string; // e.g. "28(16)", "37*(43)"
+  oppn: string; // e.g. "IND", "IRE"
+  format: string; // e.g. "T20I", "ODI"
+  date: string; // e.g. "15 Sep 26"
+}
+
+export interface MatchBowlingForm {
+  wickets: string; // e.g. "3-36", "6-34"
+  oppn: string; // e.g. "IND", "IRE"
+  format: string; // e.g. "T20I", "ODI"
+  date: string; // e.g. "15 Sep 26"
+}
+
+export interface FormatRankingEntry {
+  format: string; // "Test" | "ODI" | "T20I"
+  currentRank: string; // e.g. "--", "78", "1"
+  bestRank: string; // e.g. "78", "1"
+}
+
+export interface PlayerRankings {
+  batting: FormatRankingEntry[];
+  bowling: FormatRankingEntry[];
+  allRounder: FormatRankingEntry[];
+}
+
 export interface PlayerCareerStats {
   matches: number;
   innings?: number;
@@ -77,6 +131,18 @@ export interface PlayerCareerStats {
   bestBowling: string;
   catches?: number;
   stumpings?: number;
+  battingByFormat?: {
+    test?: FormatBattingStats;
+    odi?: FormatBattingStats;
+    t20?: FormatBattingStats;
+    ipl?: FormatBattingStats;
+  };
+  bowlingByFormat?: {
+    test?: FormatBowlingStats;
+    odi?: FormatBowlingStats;
+    t20?: FormatBowlingStats;
+    ipl?: FormatBowlingStats;
+  };
 }
 
 export interface Player {
@@ -91,10 +157,16 @@ export interface Player {
   battingStyle: string;
   bowlingStyle: string;
   country?: string;
+  flag?: string;
+  born?: string; // e.g. "September 20, 1998 (27 years)"
+  birthPlace?: string; // e.g. "Nangarhar" / "Chennai"
   jerseyNumber?: number;
   isCaptain?: boolean;
   isWicketkeeper?: boolean;
   careerStats: PlayerCareerStats;
+  battingForm?: MatchBattingForm[];
+  bowlingForm?: MatchBowlingForm[];
+  rankings?: PlayerRankings;
   recentInnings?: {
     match: string;
     runs: number;
@@ -331,6 +403,9 @@ export interface Match {
     team1: PlayingXIPlayer[];
     team2: PlayingXIPlayer[];
   };
+  playersPerTeam?: number;
+  allowSingleWicket?: boolean;
+  maxWickets?: number;
 }
 
 export interface Scorecard {
@@ -406,6 +481,9 @@ export interface CreateMatchPayload {
   bowlerName?: string;
   team1PlayingXI?: PlayingXIPlayer[];
   team2PlayingXI?: PlayingXIPlayer[];
+  playersPerTeam?: number;
+  allowSingleWicket?: boolean;
+  maxWickets?: number;
   createdBy?: string;
 }
 
@@ -417,4 +495,67 @@ export interface HealthCheckResult {
   message: string;
   timestamp: string;
   version: string;
+}
+
+export interface TournamentPlayerBattingStat {
+  playerId: string;
+  name: string;
+  shortName: string;
+  teamId?: string;
+  teamName: string;
+  teamShort: string;
+  avatar?: string;
+  matches: number;
+  innings: number;
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  highestScore: number;
+  highestNotOut: boolean;
+  average: number;
+  strikeRate: number;
+}
+
+export interface TournamentPlayerBowlingStat {
+  playerId: string;
+  name: string;
+  shortName: string;
+  teamId?: string;
+  teamName: string;
+  teamShort: string;
+  avatar?: string;
+  matches: number;
+  innings: number;
+  overs: number;
+  oversInBalls: number;
+  maidens: number;
+  runs: number;
+  wickets: number;
+  economy: number;
+  average: number;
+  bestWickets: number;
+  bestRuns: number;
+  bestBowling: string;
+}
+
+export interface TournamentMVPStat {
+  playerId: string;
+  name: string;
+  shortName: string;
+  teamId?: string;
+  teamName: string;
+  teamShort: string;
+  avatar?: string;
+  matches: number;
+  points: number;
+  runs: number;
+  wickets: number;
+  catches: number;
+}
+
+export interface TournamentLeaderStats {
+  mostRuns: TournamentPlayerBattingStat[];
+  mostWickets: TournamentPlayerBowlingStat[];
+  mvp: TournamentMVPStat[];
 }

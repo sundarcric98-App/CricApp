@@ -20,7 +20,7 @@ import MatchCard from '../components/match/MatchCard';
 import StandingsTable from '../components/tournament/StandingsTable';
 import Colors from '../constants/colors';
 import cricketApi from '../services/api';
-import { Match, Team, Tournament, TournamentStanding } from '../types/cricket';
+import { Match, Team, Tournament, TournamentLeaderStats, TournamentStanding } from '../types/cricket';
 
 type TabType = 'Teams' | 'Matches' | 'Points Table' | 'Leaders' | 'Info';
 
@@ -36,6 +36,8 @@ export const TournamentDetailScreen: React.FC = () => {
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [tournamentMatches, setTournamentMatches] = useState<Match[]>([]);
   const [standings, setStandings] = useState<TournamentStanding[]>([]);
+  const [stats, setStats] = useState<TournamentLeaderStats | null>(null);
+  const [leaderSubTab, setLeaderSubTab] = useState<'runs' | 'wickets' | 'mvp'>('runs');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -44,15 +46,17 @@ export const TournamentDetailScreen: React.FC = () => {
   const loadTournamentData = useCallback(async () => {
     if (!tournamentId) return;
     try {
-      const [tourData, allTeamsList] = await Promise.all([
+      const [tourData, allTeamsList, statsData] = await Promise.all([
         cricketApi.getTournamentById(tournamentId),
         cricketApi.getTeams(),
+        cricketApi.getTournamentStats(tournamentId),
       ]);
       setTournament(tourData.tournament);
       setTournamentTeams(tourData.teams);
       setTournamentMatches(tourData.matches);
       setStandings(tourData.standings);
       setAllTeams(allTeamsList);
+      setStats(statsData);
     } catch (err) {
       console.log('Error loading tournament detail', err);
     } finally {
@@ -391,39 +395,245 @@ export const TournamentDetailScreen: React.FC = () => {
         {/* Tab 4: Leaders & Stats */}
         {activeTab === 'Leaders' && (
           <View style={styles.tabContentSection}>
-            <Text style={styles.sectionTitle}>Top Tournament Performers</Text>
+            {/* Sub Tabs: Most Runs | Most Wickets | MVP */}
+            <View style={styles.leaderSubTabsBar}>
+              <TouchableOpacity
+                style={[styles.leaderSubTabBtn, leaderSubTab === 'runs' && styles.leaderSubTabBtnActive]}
+                onPress={() => setLeaderSubTab('runs')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="flame"
+                  size={15}
+                  color={leaderSubTab === 'runs' ? '#FFFFFF' : '#E65100'}
+                />
+                <Text
+                  style={[
+                    styles.leaderSubTabText,
+                    leaderSubTab === 'runs' && styles.leaderSubTabTextActive,
+                  ]}
+                >
+                  Most Runs
+                </Text>
+              </TouchableOpacity>
 
-            <View style={styles.leaderboardsGrid}>
-              <View style={styles.leaderboardCard}>
-                <View style={styles.leaderboardHeader}>
-                  <Ionicons name="flame" size={16} color="#FFB95F" />
-                  <Text style={styles.leaderboardTitle}>Most Runs</Text>
-                </View>
-                <View style={styles.leaderItem}>
-                  <Text style={styles.leaderRank}>1</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.leaderName}>Top Batsman</Text>
-                    <Text style={styles.leaderMeta}>Avg: 54.0 • SR: 145.2</Text>
-                  </View>
-                  <Text style={styles.leaderScore}>162</Text>
-                </View>
-              </View>
+              <TouchableOpacity
+                style={[styles.leaderSubTabBtn, leaderSubTab === 'wickets' && styles.leaderSubTabBtnActive]}
+                onPress={() => setLeaderSubTab('wickets')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="flash"
+                  size={15}
+                  color={leaderSubTab === 'wickets' ? '#FFFFFF' : '#00897B'}
+                />
+                <Text
+                  style={[
+                    styles.leaderSubTabText,
+                    leaderSubTab === 'wickets' && styles.leaderSubTabTextActive,
+                  ]}
+                >
+                  Most Wickets
+                </Text>
+              </TouchableOpacity>
 
-              <View style={styles.leaderboardCard}>
-                <View style={styles.leaderboardHeader}>
-                  <Ionicons name="flash" size={16} color="#4EDEAF" />
-                  <Text style={styles.leaderboardTitle}>Most Wickets</Text>
-                </View>
-                <View style={styles.leaderItem}>
-                  <Text style={styles.leaderRank}>1</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.leaderName}>Top Bowler</Text>
-                    <Text style={styles.leaderMeta}>Econ: 6.25 • 4/18</Text>
-                  </View>
-                  <Text style={styles.leaderScore}>8</Text>
-                </View>
-              </View>
+              <TouchableOpacity
+                style={[styles.leaderSubTabBtn, leaderSubTab === 'mvp' && styles.leaderSubTabBtnActive]}
+                onPress={() => setLeaderSubTab('mvp')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="trophy"
+                  size={15}
+                  color={leaderSubTab === 'mvp' ? '#FFFFFF' : '#F59E0B'}
+                />
+                <Text
+                  style={[
+                    styles.leaderSubTabText,
+                    leaderSubTab === 'mvp' && styles.leaderSubTabTextActive,
+                  ]}
+                >
+                  MVP Impact
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {/* Most Runs View */}
+            {leaderSubTab === 'runs' && (
+              <View style={styles.leadersListContainer}>
+                {stats && stats.mostRuns.length > 0 ? (
+                  stats.mostRuns.map((p, idx) => {
+                    const isPodium = idx < 3;
+                    const rankBadgeColor =
+                      idx === 0 ? '#F59E0B' : idx === 1 ? '#94A3B8' : idx === 2 ? '#B45309' : '#64748B';
+                    return (
+                      <View
+                        key={`runs_${p.playerId}_${idx}`}
+                        style={[styles.leaderboardRowCard, isPodium && styles.podiumCard]}
+                      >
+                        <View style={[styles.rankBadge, { backgroundColor: rankBadgeColor }]}>
+                          <Text style={styles.rankBadgeText}>#{idx + 1}</Text>
+                        </View>
+
+                        <Image
+                          source={{
+                            uri:
+                              p.avatar ||
+                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+                          }}
+                          style={styles.playerAvatarSmall}
+                        />
+
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={styles.leaderNameRow}>
+                            <Text style={styles.leaderPlayerName} numberOfLines={1}>
+                              {p.name}
+                            </Text>
+                            <View style={styles.teamPillSmall}>
+                              <Text style={styles.teamPillSmallText}>{p.teamShort}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.leaderSubMeta}>
+                            {p.innings} Inn • {p.balls} Balls • {p.fours} 4s • {p.sixes} 6s • SR {p.strikeRate}
+                          </Text>
+                        </View>
+
+                        <View style={styles.scoreHighlightBox}>
+                          <Text style={styles.scoreHighlightNum}>{p.runs}</Text>
+                          <Text style={styles.scoreHighlightLabel}>RUNS</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="flame-outline" size={36} color="#E65100" />
+                    <Text style={styles.emptyCardTitle}>No Batting Records Yet</Text>
+                    <Text style={styles.emptyCardText}>
+                      Top run-scorers and boundary leaders will appear automatically as tournament matches are scored.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Most Wickets View */}
+            {leaderSubTab === 'wickets' && (
+              <View style={styles.leadersListContainer}>
+                {stats && stats.mostWickets.length > 0 ? (
+                  stats.mostWickets.map((p, idx) => {
+                    const isPodium = idx < 3;
+                    const rankBadgeColor =
+                      idx === 0 ? '#00897B' : idx === 1 ? '#94A3B8' : idx === 2 ? '#B45309' : '#64748B';
+                    return (
+                      <View
+                        key={`wkts_${p.playerId}_${idx}`}
+                        style={[styles.leaderboardRowCard, isPodium && styles.podiumCard]}
+                      >
+                        <View style={[styles.rankBadge, { backgroundColor: rankBadgeColor }]}>
+                          <Text style={styles.rankBadgeText}>#{idx + 1}</Text>
+                        </View>
+
+                        <Image
+                          source={{
+                            uri:
+                              p.avatar ||
+                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+                          }}
+                          style={styles.playerAvatarSmall}
+                        />
+
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={styles.leaderNameRow}>
+                            <Text style={styles.leaderPlayerName} numberOfLines={1}>
+                              {p.name}
+                            </Text>
+                            <View style={styles.teamPillSmall}>
+                              <Text style={styles.teamPillSmallText}>{p.teamShort}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.leaderSubMeta}>
+                            {p.overs} Ov • {p.maidens} M • {p.runs} R • Econ {p.economy} • Best {p.bestBowling}
+                          </Text>
+                        </View>
+
+                        <View style={[styles.scoreHighlightBox, { backgroundColor: '#E0F2FE' }]}>
+                          <Text style={[styles.scoreHighlightNum, { color: '#0284C7' }]}>{p.wickets}</Text>
+                          <Text style={styles.scoreHighlightLabel}>WKTS</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="flash-outline" size={36} color="#00897B" />
+                    <Text style={styles.emptyCardTitle}>No Bowling Records Yet</Text>
+                    <Text style={styles.emptyCardText}>
+                      Top wicket-takers and economy leaders will appear automatically as tournament matches are scored.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* MVP View */}
+            {leaderSubTab === 'mvp' && (
+              <View style={styles.leadersListContainer}>
+                {stats && stats.mvp.length > 0 ? (
+                  stats.mvp.map((p, idx) => {
+                    const isPodium = idx < 3;
+                    const rankBadgeColor =
+                      idx === 0 ? '#F59E0B' : idx === 1 ? '#94A3B8' : idx === 2 ? '#B45309' : '#64748B';
+                    return (
+                      <View
+                        key={`mvp_${p.playerId}_${idx}`}
+                        style={[styles.leaderboardRowCard, isPodium && styles.podiumCard]}
+                      >
+                        <View style={[styles.rankBadge, { backgroundColor: rankBadgeColor }]}>
+                          <Text style={styles.rankBadgeText}>#{idx + 1}</Text>
+                        </View>
+
+                        <Image
+                          source={{
+                            uri:
+                              p.avatar ||
+                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+                          }}
+                          style={styles.playerAvatarSmall}
+                        />
+
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={styles.leaderNameRow}>
+                            <Text style={styles.leaderPlayerName} numberOfLines={1}>
+                              {p.name}
+                            </Text>
+                            <View style={styles.teamPillSmall}>
+                              <Text style={styles.teamPillSmallText}>{p.teamShort}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.leaderSubMeta}>
+                            {p.matches} Mat • {p.runs} Runs • {p.wickets} Wkts • {p.catches} Catches
+                          </Text>
+                        </View>
+
+                        <View style={[styles.scoreHighlightBox, { backgroundColor: '#FEF3C7' }]}>
+                          <Text style={[styles.scoreHighlightNum, { color: '#B45309' }]}>{p.points}</Text>
+                          <Text style={styles.scoreHighlightLabel}>PTS</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="trophy-outline" size={36} color="#F59E0B" />
+                    <Text style={styles.emptyCardTitle}>No MVP Data Yet</Text>
+                    <Text style={styles.emptyCardText}>
+                      Tournament MVP rankings are computed dynamically from player batting, bowling and fielding impact points.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -799,53 +1009,126 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  leaderboardsGrid: {
-    gap: 12,
+  leaderSubTabsBar: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#E2E8F0',
+    padding: 4,
+    borderRadius: 14,
   },
-  leaderboardCard: {
+  leaderSubTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  leaderSubTabBtnActive: {
+    backgroundColor: '#0F172A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  leaderSubTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  leaderSubTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  leadersListContainer: {
+    gap: 10,
+    marginTop: 4,
+  },
+  leaderboardRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 8,
+    gap: 12,
   },
-  leaderboardHeader: {
+  podiumCard: {
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  rankBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  playerAvatarSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+  },
+  leaderNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  leaderboardTitle: {
-    fontSize: 13,
+  leaderPlayerName: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
-    textTransform: 'uppercase',
+    flexShrink: 1,
   },
-  leaderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
+  teamPillSmall: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  leaderRank: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#00695C',
-    width: 20,
-  },
-  leaderName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  leaderMeta: {
-    fontSize: 11,
+  teamPillSmallText: {
+    fontSize: 9,
+    fontWeight: '800',
     color: '#64748B',
   },
-  leaderScore: {
+  leaderSubMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  scoreHighlightBox: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  scoreHighlightNum: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#B45309',
+  },
+  scoreHighlightLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#78350F',
+    letterSpacing: 0.5,
   },
   infoCard: {
     backgroundColor: '#FFFFFF',

@@ -182,7 +182,7 @@ export const CreateTeamScreen: React.FC = () => {
             <View style={{ flex: 1 }}>
               <Text style={styles.creatorTitle}>Club Captain / Admin</Text>
               <Text style={styles.creatorSubtitle}>
-                {currentUser?.name || 'Sundar'} ({currentUser?.userCode || 'SUND4821'})
+                {currentUser?.name || 'Club Captain'}{currentUser?.userCode ? ` (${currentUser.userCode})` : ''}
               </Text>
             </View>
           </View>

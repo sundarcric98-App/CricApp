@@ -57,6 +57,9 @@ export const CreateMatchScreen: React.FC = () => {
   const [nonStrikerName, setNonStrikerName] = useState('');
   const [bowlerName, setBowlerName] = useState('');
 
+  const [playersPerTeam, setPlayersPerTeam] = useState<number>(11);
+  const [allowSingleWicket, setAllowSingleWicket] = useState<boolean>(false);
+
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -105,6 +108,14 @@ export const CreateMatchScreen: React.FC = () => {
       setTeamBPlayers([]);
     }
   }, [selectedTeamBId]);
+
+  // Auto-sync playersPerTeam from squad size when teams load
+  useEffect(() => {
+    const maxSquad = Math.max(teamAPlayers.length, teamBPlayers.length);
+    if (maxSquad >= 2) {
+      setPlayersPerTeam(maxSquad);
+    }
+  }, [teamAPlayers.length, teamBPlayers.length]);
 
   const getTeamAName = () => {
     if (selectedTeamAId) {
@@ -180,6 +191,10 @@ export const CreateMatchScreen: React.FC = () => {
       ? parseInt(customOvers, 10)
       : overs;
 
+    const maxWickets = allowSingleWicket
+      ? playersPerTeam
+      : Math.max(1, playersPerTeam - 1);
+
     setSubmitting(true);
     try {
       const teamAObj = teams.find((t) => t.id === selectedTeamAId);
@@ -197,7 +212,7 @@ export const CreateMatchScreen: React.FC = () => {
         teamBLogo: teamBObj?.logoUrl,
         tournamentId: tournamentObj?.id,
         tournamentName: tournamentObj?.name || customSeriesName || 'Friendly Series 2026',
-        matchType: `${effectiveOvers} Overs Match`,
+        matchType: `${effectiveOvers} Overs Match (${playersPerTeam}v${playersPerTeam})`,
         overs: effectiveOvers,
         venue: venue.trim() || 'Cricket Stadium',
         city: city.trim() || 'City',
@@ -206,6 +221,9 @@ export const CreateMatchScreen: React.FC = () => {
         strikerName: strikerName.trim() || `${battingTeamName} Opener 1`,
         nonStrikerName: nonStrikerName.trim() || `${battingTeamName} Opener 2`,
         bowlerName: bowlerName.trim() || `${bowlingTeamName} Bowler 1`,
+        playersPerTeam,
+        allowSingleWicket,
+        maxWickets,
         createdBy: currentUser?.id,
       });
 
@@ -567,7 +585,74 @@ export const CreateMatchScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Section 4: Toss Details */}
+        {/* Section 4: Squad Size & Single Wicket Rules */}
+        <View style={styles.cardSection}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={styles.sectionHeader}>Squad Size & Wickets</Text>
+            <View style={styles.maxWicketsPill}>
+              <Text style={styles.maxWicketsPillText}>
+                ALL OUT: {allowSingleWicket ? playersPerTeam : Math.max(1, playersPerTeam - 1)} WICKETS
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.fieldLabel}>Players Per Team ({playersPerTeam}v{playersPerTeam})</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
+            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((n) => (
+              <TouchableOpacity
+                key={n}
+                style={[
+                  styles.teamChip,
+                  playersPerTeam === n && styles.teamChipActive,
+                ]}
+                onPress={() => setPlayersPerTeam(n)}
+              >
+                <Text
+                  style={[
+                    styles.teamChipText,
+                    playersPerTeam === n && styles.teamChipTextActive,
+                  ]}
+                >
+                  {n} Players
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Single Wicket / Lone Batsman Mode Toggle */}
+          <TouchableOpacity
+            style={[styles.singleWicketCard, allowSingleWicket && styles.singleWicketCardActive]}
+            onPress={() => setAllowSingleWicket(!allowSingleWicket)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1, gap: 3 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons
+                  name={allowSingleWicket ? "person" : "people-outline"}
+                  size={16}
+                  color={allowSingleWicket ? '#00796B' : '#64748B'}
+                />
+                <Text style={[styles.singleWicketTitle, allowSingleWicket && styles.singleWicketTitleActive]}>
+                  Single Wicket (Last Man Stands)
+                </Text>
+              </View>
+              <Text style={styles.singleWicketDesc}>
+                {allowSingleWicket
+                  ? `Enabled: Single batsman can continue batting alone until all ${playersPerTeam} wickets fall.`
+                  : `Disabled: Standard rules. Team is all out when no partner remains (${Math.max(1, playersPerTeam - 1)} wickets).`}
+              </Text>
+            </View>
+            <View style={[styles.toggleSwitch, allowSingleWicket && styles.toggleSwitchActive]}>
+              <View style={[styles.toggleKnob, allowSingleWicket && styles.toggleKnobActive]} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Section 5: Toss Details */}
         <View style={styles.cardSection}>
           <Text style={styles.sectionHeader}>Toss Module</Text>
 
@@ -1212,6 +1297,74 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#475569',
+  },
+  maxWicketsPill: {
+    backgroundColor: 'rgba(0, 121, 107, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 121, 107, 0.25)',
+  },
+  maxWicketsPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#00796B',
+    letterSpacing: 0.5,
+  },
+  singleWicketCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
+    gap: 12,
+  },
+  singleWicketCardActive: {
+    backgroundColor: 'rgba(0, 121, 107, 0.06)',
+    borderColor: 'rgba(0, 121, 107, 0.3)',
+  },
+  singleWicketTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  singleWicketTitleActive: {
+    color: '#00796B',
+  },
+  singleWicketDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
+  },
+  toggleSwitch: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#CBD5E1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: '#00796B',
+  },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleKnobActive: {
+    alignSelf: 'flex-end',
   },
 });
 

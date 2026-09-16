@@ -21,6 +21,25 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
   const currentBatting = isTeam1Batting ? match.team1 : match.team2;
   const currentBowling = isTeam1Batting ? match.team2 : match.team1;
 
+  const maxBattingOvers = currentBatting.maxOvers || match.team1.maxOvers || 20;
+  const maxBowlingOvers = currentBowling.maxOvers || match.team1.maxOvers || 20;
+  const cappedBattingOvers = Math.min(maxBattingOvers, currentBatting.overs).toFixed(1);
+  const cappedBowlingOvers = Math.min(maxBowlingOvers, currentBowling.overs).toFixed(1);
+
+  const isSecondInnings = match.currentInnings === 2;
+  const target = match.target || currentBowling.score + 1;
+  const maxBalls = maxBattingOvers * 6;
+  const currentBalls = Math.min(maxBalls, Math.round(Number(currentBatting.overs || 0) * 6));
+  const runsNeeded = Math.max(0, target - currentBatting.score);
+  const ballsRemaining = Math.max(0, maxBalls - currentBalls);
+
+  const displayEquation =
+    match.status === 'completed'
+      ? match.result || 'Match Completed'
+      : isSecondInnings
+      ? `Need ${runsNeeded} runs in ${ballsRemaining} balls (Target: ${target})`
+      : match.equation || `CRR: ${match.crr.toFixed(2)}`;
+
   const tabs: { key: MatchDetailTab; label: string }[] = [
     { key: 'scorecard', label: 'Scorecard' },
     { key: 'commentary', label: 'Commentary' },
@@ -33,9 +52,9 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
       {/* Top Telemetry Strip */}
       <View style={styles.telemetryStrip}>
         <View style={styles.telemetryLeft}>
-          <View style={styles.inningsBadge}>
-            <View style={styles.pulsingDot} />
-            <Text style={styles.inningsBadgeText}>
+          <View style={[styles.inningsBadge, match.status === 'completed' && { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
+            <View style={[styles.pulsingDot, match.status === 'completed' && { backgroundColor: '#F59E0B' }]} />
+            <Text style={[styles.inningsBadgeText, match.status === 'completed' && { color: '#F59E0B' }]}>
               {match.status === 'live' ? `LIVE • Innings ${match.currentInnings}` : match.status.toUpperCase()}
             </Text>
           </View>
@@ -56,14 +75,14 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
             <View style={styles.activeDot} />
             <Text style={styles.teamCode}>{currentBatting.shortName}</Text>
             <Text style={styles.teamInningsTag}>
-              {match.currentInnings === 2 ? '(chasing)' : '(batting)'}
+              {match.status === 'completed' ? 'Final' : match.currentInnings === 2 ? '(chasing)' : '(batting)'}
             </Text>
           </View>
           <View style={styles.scoreRow}>
             <Text style={styles.primaryScore}>
               {currentBatting.score}/{currentBatting.wickets}
             </Text>
-            <Text style={styles.oversSmall}>{currentBatting.overs.toFixed(1)} ov</Text>
+            <Text style={styles.oversSmall}>{cappedBattingOvers} ov</Text>
           </View>
         </View>
 
@@ -72,16 +91,16 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
           <View style={styles.teamHeaderRowRight}>
             <Text style={styles.teamCodeSecondary}>{currentBowling.shortName}</Text>
             <Text style={styles.teamInningsTag}>
-              {match.currentInnings === 2 ? '1st Inn' : 'Yet to bat'}
+              {match.currentInnings === 2 || match.status === 'completed' ? '1st Inn' : 'Yet to bat'}
             </Text>
           </View>
           <View style={styles.scoreRowRight}>
-            {match.currentInnings === 2 ? (
+            {match.currentInnings === 2 || match.status === 'completed' ? (
               <>
                 <Text style={styles.secondaryScore}>
                   {currentBowling.score}/{currentBowling.wickets}
                 </Text>
-                <Text style={styles.oversSmallSecondary}>{currentBowling.overs.toFixed(1)} ov</Text>
+                <Text style={styles.oversSmallSecondary}>{cappedBowlingOvers} ov</Text>
               </>
             ) : (
               <Text style={styles.oversSmallSecondary}>0/0</Text>
@@ -90,20 +109,24 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
         </View>
       </View>
 
-      {/* Live Equation Banner Strip */}
-      {match.equation && (
-        <View style={styles.equationStrip}>
+      {/* Live Equation / Result Banner Strip */}
+      {displayEquation ? (
+        <View style={[styles.equationStrip, match.status === 'completed' && { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
           <View style={styles.equationLeft}>
-            <Ionicons name="flash" size={14} color={Colors.secondary} />
-            <Text style={styles.equationText} numberOfLines={1}>
-              {match.equation}
+            <Ionicons
+              name={match.status === 'completed' ? 'trophy' : 'flash'}
+              size={14}
+              color={match.status === 'completed' ? '#F59E0B' : Colors.secondary}
+            />
+            <Text style={[styles.equationText, match.status === 'completed' && { color: '#FCD34D', fontWeight: '800' }]} numberOfLines={1}>
+              {displayEquation}
             </Text>
           </View>
           <View style={styles.ratesRow}>
             <Text style={styles.rateItem}>
               CRR <Text style={styles.rateBold}>{match.crr.toFixed(2)}</Text>
             </Text>
-            {match.rrr !== undefined && match.rrr > 0 && (
+            {match.status === 'live' && isSecondInnings && match.rrr !== undefined && match.rrr > 0 && (
               <>
                 <Text style={styles.rateBullet}>•</Text>
                 <Text style={styles.rateItem}>
@@ -113,7 +136,7 @@ export const ScoreHeader: React.FC<ScoreHeaderProps> = ({
             )}
           </View>
         </View>
-      )}
+      ) : null}
 
       {/* Segmented Navigation Pills */}
       <ScrollView

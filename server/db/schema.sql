@@ -33,6 +33,7 @@ CREATE TABLE users (
     pin_hash TEXT,
     mobile TEXT,
     user_code TEXT UNIQUE NOT NULL,
+    token TEXT,
     profile_image TEXT,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()

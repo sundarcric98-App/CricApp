@@ -9,292 +9,318 @@ interface PlayerStatCardProps {
 }
 
 export const PlayerStatCard: React.FC<PlayerStatCardProps> = ({ player }) => {
+  const battingForm = player.battingForm || [];
+  const bowlingForm = player.bowlingForm || [];
+
   return (
     <View style={styles.container}>
-      {/* Profile Header Hero */}
-      <View style={styles.heroCard}>
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: player.avatar }} style={styles.avatar} />
-          <View style={styles.jerseyBadge}>
-            <Text style={styles.jerseyText}>#{player.jerseyNumber || 18}</Text>
-          </View>
-        </View>
-
-        <View style={styles.heroDetails}>
-          <View style={styles.nameRow}>
-            <Text style={styles.playerName}>{player.name}</Text>
-            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-          </View>
-
-          {player.userCode ? (
-            <View style={styles.userCodeBadge}>
-              <Ionicons name="id-card-outline" size={12} color={Colors.primary} />
-              <Text style={styles.userCodeBadgeText}>ID: {player.userCode}</Text>
+      {/* 1. HERO BIO CARD */}
+      <View style={styles.card}>
+        <View style={styles.heroRow}>
+          <View style={styles.avatarWrap}>
+            <Image
+              source={{
+                uri:
+                  player.avatar ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+              }}
+              style={styles.avatarImg}
+            />
+            <View style={styles.flagBadge}>
+              <Text style={styles.flagText}>{player.flag || '🇮🇳'}</Text>
             </View>
-          ) : null}
-
-          <View style={styles.roleTag}>
-            <Text style={styles.roleText}>{player.role.toUpperCase()}</Text>
           </View>
+          <View style={styles.heroInfo}>
+            <View style={styles.nameHeaderRow}>
+              <Text style={styles.playerName}>{player.name}</Text>
+              <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+            </View>
+            <Text style={styles.playerCountry}>{player.country || 'India'}</Text>
+            {player.userCode ? (
+              <View style={styles.playerIdTag}>
+                <Ionicons name="id-card-outline" size={12} color="#D4AF37" />
+                <Text style={styles.playerIdText}>ID: {player.userCode}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
-          <Text style={styles.styleText}>{player.battingStyle}</Text>
-          <Text style={styles.styleText}>{player.bowlingStyle}</Text>
+        {/* Bio Attributes Table */}
+        <View style={styles.bioTable}>
+          <View style={styles.bioRow}>
+            <Text style={styles.bioLabel}>Role</Text>
+            <Text style={styles.bioValue}>
+              {player.role === 'allrounder'
+                ? 'Allrounder'
+                : player.role === 'bowler'
+                ? 'Bowler'
+                : player.role === 'wicketkeeper'
+                ? 'Wicketkeeper Batter'
+                : 'Top-order Batter'}
+            </Text>
+          </View>
+          <View style={styles.bioDivider} />
+          <View style={styles.bioRow}>
+            <Text style={styles.bioLabel}>Batting Style</Text>
+            <Text style={styles.bioValue}>{player.battingStyle || 'Right-hand Bat'}</Text>
+          </View>
+          <View style={styles.bioDivider} />
+          <View style={styles.bioRow}>
+            <Text style={styles.bioLabel}>Bowling Style</Text>
+            <Text style={styles.bioValue}>{player.bowlingStyle || 'Right-arm Medium'}</Text>
+          </View>
         </View>
       </View>
 
-      {/* Career Overview Numbers Grid */}
-      <View style={styles.statsCard}>
-        <Text style={styles.sectionTitle}>Career Statistics</Text>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{player.careerStats.matches}</Text>
-            <Text style={styles.statLabel}>Matches</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: Colors.primary }]}>
-              {player.careerStats.runs}
-            </Text>
-            <Text style={styles.statLabel}>Runs</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{player.careerStats.average}</Text>
-            <Text style={styles.statLabel}>Average</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={[styles.statNumber, { color: Colors.secondary }]}>
-              {player.careerStats.strikeRate}
-            </Text>
-            <Text style={styles.statLabel}>Strike Rate</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{player.careerStats.highestScore}</Text>
-            <Text style={styles.statLabel}>Highest Score</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statNumber}>
-              {player.careerStats.hundreds}/{player.careerStats.fifties}
-            </Text>
-            <Text style={styles.statLabel}>100s / 50s</Text>
-          </View>
-
-          {player.careerStats.wickets > 0 && (
-            <>
-              <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{player.careerStats.wickets}</Text>
-                <Text style={styles.statLabel}>Wickets</Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <Text style={styles.statNumber}>{player.careerStats.economy}</Text>
-                <Text style={styles.statLabel}>Economy</Text>
-              </View>
-            </>
-          )}
-        </View>
-      </View>
-
-      {/* Recent Innings Log */}
-      {player.recentInnings && player.recentInnings.length > 0 && (
-        <View style={styles.statsCard}>
-          <Text style={styles.sectionTitle}>Recent Match Innings</Text>
-
-          <View style={styles.inningsList}>
-            {player.recentInnings.map((inn, idx) => (
-              <View key={`inn_${idx}`} style={styles.inningItem}>
-                <View style={styles.inningLeft}>
-                  <Text style={styles.matchOpponent}>{inn.match}</Text>
-                  <Text style={styles.matchDate}>{inn.date}</Text>
-                </View>
-
-                <View style={styles.scorePill}>
-                  <Text style={styles.inningRuns}>
-                    {inn.runs}
-                    {!inn.isOut ? '*' : ''}
-                  </Text>
-                  <Text style={styles.inningBalls}>({inn.balls}b)</Text>
-                </View>
+      {/* 2. BATTING FORM CARD */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Batting Form</Text>
+        {battingForm.length > 0 ? (
+          <View style={styles.tableWrap}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.tableHeadCell, { flex: 1.4 }]}>Score</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1, textAlign: 'center' }]}>OPPN.</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1, textAlign: 'center' }]}>Format</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1.3, textAlign: 'right' }]}>Date</Text>
+            </View>
+            {battingForm.map((row, idx) => (
+              <View key={`b_form_${idx}`} style={[styles.tableDataRow, idx % 2 === 1 && styles.rowAlt]}>
+                <Text style={[styles.tableCellBold, { flex: 1.4, color: Colors.onSurface }]}>
+                  {row.score}
+                </Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: 'center' }]}>{row.oppn}</Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: 'center', color: Colors.primary }]}>
+                  {row.format}
+                </Text>
+                <Text style={[styles.tableCellMuted, { flex: 1.3, textAlign: 'right' }]}>{row.date}</Text>
               </View>
             ))}
           </View>
-        </View>
-      )}
+        ) : (
+          <View style={styles.emptyFormBox}>
+            <Ionicons name="stats-chart-outline" size={24} color="#64748B" />
+            <Text style={styles.emptyFormText}>No batting innings played yet in matches.</Text>
+          </View>
+        )}
+      </View>
+
+      {/* 3. BOWLING FORM CARD */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Bowling Form</Text>
+        {bowlingForm.length > 0 ? (
+          <View style={styles.tableWrap}>
+            <View style={styles.tableHeaderRow}>
+              <Text style={[styles.tableHeadCell, { flex: 1.4 }]}>Wickets</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1, textAlign: 'center' }]}>OPPN.</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1, textAlign: 'center' }]}>Format</Text>
+              <Text style={[styles.tableHeadCell, { flex: 1.3, textAlign: 'right' }]}>Date</Text>
+            </View>
+            {bowlingForm.map((row, idx) => (
+              <View key={`bw_form_${idx}`} style={[styles.tableDataRow, idx % 2 === 1 && styles.rowAlt]}>
+                <Text style={[styles.tableCellBold, { flex: 1.4, color: Colors.secondary }]}>
+                  {row.wickets}
+                </Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: 'center' }]}>{row.oppn}</Text>
+                <Text style={[styles.tableCell, { flex: 1, textAlign: 'center', color: Colors.primary }]}>
+                  {row.format}
+                </Text>
+                <Text style={[styles.tableCellMuted, { flex: 1.3, textAlign: 'right' }]}>{row.date}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyFormBox}>
+            <Ionicons name="baseball-outline" size={24} color="#64748B" />
+            <Text style={styles.emptyFormText}>No bowling spells bowled yet in matches.</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
+    gap: 14,
+    paddingBottom: 24,
   },
-  heroCard: {
+  card: {
+    backgroundColor: '#161922',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F1F5F9',
+    marginBottom: 12,
+    letterSpacing: 0.3,
+  },
+  // Hero Bio Section
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: 20,
-    padding: 16,
     gap: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    marginBottom: 16,
   },
-  avatarContainer: {
+  avatarWrap: {
     position: 'relative',
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.surfaceContainerHighest,
+  avatarImg: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: '#232838',
+    borderWidth: 2,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
   },
-  jerseyBadge: {
+  flagBadge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 999,
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#1E2330',
+    borderRadius: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  jerseyText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.onSecondary,
+  flagText: {
+    fontSize: 14,
   },
-  heroDetails: {
+  heroInfo: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
-  nameRow: {
+  nameHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
   playerName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.onSurface,
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  userCodeBadge: {
+  playerCountry: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  playerIdTag: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(212, 175, 55, 0.15)',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 0.5,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 0.6,
     borderColor: '#D4AF37',
     alignSelf: 'flex-start',
     gap: 4,
-    marginVertical: 2,
+    marginTop: 2,
   },
-  userCodeBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
+  playerIdText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: '#D4AF37',
     letterSpacing: 0.5,
   },
-  roleTag: {
-    backgroundColor: 'rgba(78, 222, 163, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginVertical: 2,
-  },
-  roleText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: 0.5,
-  },
-  styleText: {
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
-  },
-  statsCard: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 16,
-    padding: 16,
+  // Bio Attributes Table
+  bioTable: {
+    backgroundColor: '#1B1F2A',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 12,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statBox: {
-    width: '31%',
-    backgroundColor: Colors.surfaceContainer,
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    gap: 2,
-  },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.onSurface,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-  },
-  inningsList: {
-    gap: 8,
-  },
-  inningItem: {
+  bioRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceContainer,
-    padding: 12,
-    borderRadius: 10,
+    paddingVertical: 9,
   },
-  inningLeft: {
-    gap: 2,
+  bioDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  matchOpponent: {
-    fontSize: 14,
+  bioLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    flex: 1,
+  },
+  bioValue: {
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.onSurface,
+    color: '#E2E8F0',
+    flex: 1.5,
+    textAlign: 'right',
   },
-  matchDate: {
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
+  // Standard Form Table
+  tableWrap: {
+    backgroundColor: '#1B1F2A',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  scorePill: {
+  tableHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    backgroundColor: Colors.surfaceContainerHighest,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    backgroundColor: '#222838',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
-  inningRuns: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.primary,
-  },
-  inningBalls: {
+  tableHeadCell: {
     fontSize: 11,
-    color: Colors.onSurfaceVariant,
+    fontWeight: '800',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+  },
+  tableDataRow: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  rowAlt: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+  },
+  tableCellBold: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tableCell: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E2E8F0',
+  },
+  tableCellMuted: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  emptyFormBox: {
+    backgroundColor: '#1B1F2A',
+    borderRadius: 10,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  emptyFormText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    textAlign: 'center',
   },
 });
 
