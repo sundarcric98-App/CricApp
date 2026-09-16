@@ -259,9 +259,11 @@ export const CreateMatchScreen: React.FC = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 220 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 240 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Match Header Preview Banner */}
         <View style={styles.previewCard}>

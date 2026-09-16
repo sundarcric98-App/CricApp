@@ -127,9 +127,11 @@ export const CreateTournamentScreen: React.FC = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 180 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Banner Preview & Selector */}
         <View style={styles.bannerSection}>

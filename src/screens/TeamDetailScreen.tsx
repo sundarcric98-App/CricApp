@@ -526,7 +526,14 @@ export const TeamDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets={true}
+              contentContainerStyle={{ paddingBottom: 80 }}
+              style={{ maxHeight: 480 }}
+            >
               {/* SUBTAB 1: SEARCH BY PLAYER ID */}
               {modalMode === 'search' && (
                 <View style={styles.searchSection}>

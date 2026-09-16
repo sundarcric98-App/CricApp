@@ -6,6 +6,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -111,11 +112,24 @@ export const OtpVerificationScreen: React.FC = () => {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <View style={[styles.content, { paddingTop: Math.max(insets.top, 20), paddingBottom: Math.max(insets.bottom, 20) }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: Math.max(insets.top, 20) + 40,
+            paddingBottom: Math.max(insets.bottom, 20) + 80,
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={true}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Top Navigation */}
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { top: Math.max(insets.top, 16) }]}
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
@@ -193,7 +207,7 @@ export const OtpVerificationScreen: React.FC = () => {
             </Text>
           )}
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -204,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
   },

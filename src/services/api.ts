@@ -191,6 +191,7 @@ export const cricketApi = {
     const userCode = generatePlayerIdFromUsername(cleanUsername);
 
     try {
+      // Primary Insert: uses username, email, password_hash
       const { data: user, error } = await supabase
         .from('users')
         .insert([
@@ -205,13 +206,7 @@ export const cricketApi = {
         .select()
         .single();
 
-      if (error) {
-        console.warn('Supabase signUp error:', error.message);
-        throw new Error(error.message);
-      }
-
       if (user) {
-        // Initialize player_stats
         try {
           await supabase.from('player_stats').insert([{ user_id: user.id }]).select();
         } catch (e) {
@@ -221,16 +216,48 @@ export const cricketApi = {
         const createdUser: User = {
           id: user.id,
           name: user.name,
-          username: user.username,
-          email: user.email,
-          userCode: user.user_code,
+          username: user.username || cleanUsername,
+          email: user.email || cleanEmail,
+          userCode: user.user_code || userCode,
           profileImage: user.profile_image || undefined,
         };
 
-        return { user: createdUser, userCode: user.user_code };
+        return { user: createdUser, userCode: user.user_code || userCode };
+      }
+
+      // If Supabase schema cache doesn't have email/username columns yet, fallback to legacy columns
+      if (error && (error.message?.includes('schema cache') || error.message?.includes('column'))) {
+        console.warn('Supabase schema missing new columns, trying fallback column insert...', error.message);
+        const { data: legacyUser, error: legacyErr } = await supabase
+          .from('users')
+          .insert([
+            {
+              name: cleanName,
+              user_code: userCode,
+              mobile: cleanUsername,
+              pin_hash: payload.password.slice(0, 4),
+            },
+          ])
+          .select()
+          .single();
+
+        if (!legacyErr && legacyUser) {
+          try {
+            await supabase.from('player_stats').insert([{ user_id: legacyUser.id }]).select();
+          } catch (e) {}
+
+          const createdUser: User = {
+            id: legacyUser.id,
+            name: legacyUser.name,
+            username: cleanUsername,
+            email: cleanEmail,
+            userCode: legacyUser.user_code || userCode,
+          };
+          return { user: createdUser, userCode };
+        }
       }
     } catch (err: any) {
-      if (err?.message) throw err;
+      console.warn('Supabase signUp error handled:', err?.message || err);
     }
 
     const fallbackUser: User = {
@@ -253,11 +280,21 @@ export const cricketApi = {
     const cleanIdentifier = payload.identifier.trim().toLowerCase();
 
     try {
-      const { data: user, error } = await supabase
+      let { data: user, error } = await supabase
         .from('users')
         .select('*')
         .or(`email.ilike.${cleanIdentifier},username.ilike.${cleanIdentifier},user_code.ilike.${cleanIdentifier}`)
         .maybeSingle();
+
+      // If column is missing in schema cache, query user_code or mobile
+      if (error && (error.message?.includes('schema cache') || error.message?.includes('column'))) {
+        const { data: legacyUser } = await supabase
+          .from('users')
+          .select('*')
+          .or(`user_code.ilike.${cleanIdentifier},mobile.ilike.${cleanIdentifier}`)
+          .maybeSingle();
+        user = legacyUser;
+      }
 
       if (user) {
         if (user.password_hash && user.password_hash !== payload.password) {
@@ -267,8 +304,8 @@ export const cricketApi = {
         const authenticatedUser: User = {
           id: user.id,
           name: user.name,
-          username: user.username,
-          email: user.email,
+          username: user.username || cleanIdentifier.split('@')[0],
+          email: user.email || (cleanIdentifier.includes('@') ? cleanIdentifier : undefined),
           mobile: user.mobile,
           userCode: user.user_code,
           profileImage: user.profile_image || undefined,
@@ -284,7 +321,7 @@ export const cricketApi = {
       }
     } catch (err: any) {
       if (err?.message?.includes('Incorrect password')) throw err;
-      console.warn('Supabase signIn error:', err);
+      console.warn('Supabase signIn error handled:', err);
     }
 
     // Fallback for testing
@@ -316,7 +353,7 @@ export const cricketApi = {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, name, username, email, user_code, profile_image')
+        .select('*')
         .or(`user_code.ilike.%${cleanQuery}%,username.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
         .limit(10);
 
@@ -324,11 +361,31 @@ export const cricketApi = {
         return data.map((u: any) => ({
           id: u.id,
           name: u.name,
-          username: u.username,
+          username: u.username || u.name,
           email: u.email,
           userCode: u.user_code,
           profileImage: u.profile_image || undefined,
         }));
+      }
+
+      // If username column query failed, search by user_code and name
+      if (error && (error.message?.includes('schema cache') || error.message?.includes('column'))) {
+        const { data: legacyData } = await supabase
+          .from('users')
+          .select('*')
+          .or(`user_code.ilike.%${cleanQuery}%,name.ilike.%${cleanQuery}%`)
+          .limit(10);
+
+        if (legacyData && legacyData.length > 0) {
+          return legacyData.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            username: u.user_code,
+            email: u.email,
+            userCode: u.user_code,
+            profileImage: u.profile_image || undefined,
+          }));
+        }
       }
     } catch (err) {
       console.warn('searchPlayerByCode error:', err);

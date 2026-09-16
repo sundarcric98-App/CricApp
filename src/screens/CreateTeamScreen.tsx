@@ -104,8 +104,11 @@ export const CreateTeamScreen: React.FC = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 180 }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Logo Selection & Preview */}
         <View style={styles.logoSection}>
