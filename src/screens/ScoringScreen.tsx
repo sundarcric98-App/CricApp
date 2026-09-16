@@ -1,19 +1,24 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import EmptyState from '../components/common/EmptyState';
 import Header from '../components/common/Header';
 import ActiveBowlerCard from '../components/scoring/ActiveBowlerCard';
 import CreasePairCard from '../components/scoring/CreasePairCard';
 import ScoringKeypad from '../components/scoring/ScoringKeypad';
 import Colors from '../constants/colors';
+import cricketApi from '../services/api';
 import { fetchMatchDetails, submitBallEvent } from '../store/matchSlice';
 import {
   popUndoSnapshot,
@@ -26,108 +31,56 @@ import { useAppDispatch, useAppSelector } from '../store/store';
 import { BallType, WicketType } from '../types/cricket';
 
 export const ScoringScreen: React.FC = () => {
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const matchId = (Array.isArray(id) ? id[0] : id) || 'match_blr_mum_01';
+  const matchId = Array.isArray(id) ? id[0] : id;
 
   const dispatch = useAppDispatch();
-  const { currentMatch, scorecard } = useAppSelector((state) => state.matches);
+  const { currentMatch, scorecard, loading } = useAppSelector((state) => state.matches);
   const { undoStack, showWicketModal, showBowlerModal, isSubmitting } = useAppSelector(
     (state) => state.scoring
   );
 
   const [selectedWicketType, setSelectedWicketType] = useState<WicketType>('caught');
+  const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
+  const [showRetireModal, setShowRetireModal] = useState(false);
+  const [showEndMatchModal, setShowEndMatchModal] = useState(false);
+  const [customPlayerName, setCustomPlayerName] = useState('');
+  const [manOfTheMatchName, setManOfTheMatchName] = useState('');
+  const [selectedWinnerId, setSelectedWinnerId] = useState<string>('');
 
   useEffect(() => {
-    if (!currentMatch) {
+    if (matchId) {
       dispatch(fetchMatchDetails(matchId));
     }
-  }, [dispatch, matchId, currentMatch]);
+  }, [dispatch, matchId]);
 
-  const match = currentMatch || {
-    id: matchId,
-    title: 'BLR vs MUM',
-    seriesName: 'T20 Premier League 2025',
-    matchNumber: '2nd Semi Final',
-    venue: 'Wankhede Stadium',
-    city: 'Mumbai',
-    status: 'live' as const,
-    format: 'T20' as const,
-    currentInnings: 2 as const,
-    toss: 'Bengaluru Royals won toss & elected to field',
-    tossWinner: 'Bengaluru Royals',
-    decision: 'bowl' as const,
-    team1: {
-      id: 'team_mum',
-      name: 'Mumbai Warriors',
-      shortName: 'MUM',
-      logo: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
-      score: 178,
-      wickets: 4,
-      overs: 20.0,
-      maxOvers: 20,
-    },
-    team2: {
-      id: 'team_blr',
-      name: 'Bengaluru Royals',
-      shortName: 'BLR',
-      logo: 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80',
-      score: 145,
-      wickets: 3,
-      overs: 18.2,
-      maxOvers: 20,
-    },
-    battingTeamId: 'team_blr',
-    bowlingTeamId: 'team_mum',
-    target: 179,
-    equation: 'Need 34 runs in 10 balls',
-    crr: 7.91,
-    rrr: 20.4,
-    recentBalls: ['1', '2', '0', '4', 'W', '6', '1', '1'],
-    activeBatters: {
-      striker: {
-        playerId: 'p_kohli',
-        name: 'V. Kohli (c)*',
-        shortName: 'V Kohli',
-        runs: 68,
-        balls: 42,
-        fours: 6,
-        sixes: 2,
-        strikeRate: 161.9,
-        isStriker: true,
-        isNonStriker: false,
-        isOut: false,
-      },
-      nonStriker: {
-        playerId: 'p_maxwell',
-        name: 'G. Maxwell',
-        shortName: 'G Maxwell',
-        runs: 24,
-        balls: 11,
-        fours: 2,
-        sixes: 2,
-        strikeRate: 218.2,
-        isStriker: false,
-        isNonStriker: true,
-        isOut: false,
-      },
-    },
-    activeBowler: {
-      playerId: 'p_bumrah',
-      name: 'J. Bumrah',
-      shortName: 'J Bumrah',
-      overs: 3.2,
-      oversInBalls: 20,
-      maidens: 0,
-      runs: 28,
-      wickets: 2,
-      economy: 8.4,
-      dots: 10,
-      wides: 1,
-      noBalls: 0,
-      isCurrentBowler: true,
-    },
-    startTime: '2025-05-24T19:30:00Z',
-  };
+  if (!currentMatch) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Header showBack title="Live Scoring" />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          {loading ? (
+            <>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={{ color: Colors.onSurfaceVariant, marginTop: 12 }}>
+                Loading scoring console...
+              </Text>
+            </>
+          ) : (
+            <EmptyState
+              title="Match Not Found"
+              description="Please select or create an active match to start live scoring."
+              actionLabel="Back to Matches"
+              onAction={() => router.replace('/(tabs)' as any)}
+            />
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  const match = currentMatch;
 
   const handleScoreBall = (
     ballType: BallType,
@@ -171,7 +124,6 @@ export const ScoringScreen: React.FC = () => {
     const previousSnapshot = undoStack[undoStack.length - 1];
     dispatch(popUndoSnapshot());
 
-    // Restore match & scorecard from snapshot
     if (previousSnapshot) {
       dispatch({
         type: 'matches/handleRealtimeScoreUpdate',
@@ -198,9 +150,81 @@ export const ScoringScreen: React.FC = () => {
     });
   };
 
+  const handleEndOver = () => {
+    Alert.alert(
+      'End Over',
+      'Do you want to switch bowler and rotate striker for the new over?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm & Change Bowler',
+          onPress: () => {
+            handleSwitchStrike();
+            dispatch(setShowBowlerModal(true));
+          },
+        },
+      ]
+    );
+  };
+
   const handleConfirmWicket = () => {
     dispatch(setShowWicketModal(false));
     handleScoreBall('wicket', 0, false, true, selectedWicketType);
+    setShowNewBatsmanModal(true);
+  };
+
+  const handleAddNewBatsman = () => {
+    if (!customPlayerName.trim()) {
+      Alert.alert('Required', 'Please enter player name.');
+      return;
+    }
+    cricketApi.selectNewBatsman(match.id, customPlayerName.trim()).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setCustomPlayerName('');
+      setShowNewBatsmanModal(false);
+    });
+  };
+
+  const handleRetireConfirm = (isStriker: boolean) => {
+    if (!customPlayerName.trim()) {
+      Alert.alert('Required', 'Please enter new batsman name.');
+      return;
+    }
+    cricketApi.retireBatsman(match.id, isStriker, customPlayerName.trim()).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setCustomPlayerName('');
+      setShowRetireModal(false);
+    });
+  };
+
+  const handleCompleteMatch = async () => {
+    const winnerId = selectedWinnerId || match.team1.id;
+    try {
+      const updated = await cricketApi.completeMatch(
+        match.id,
+        winnerId,
+        manOfTheMatchName || undefined
+      );
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      setShowEndMatchModal(false);
+      Alert.alert('Match Completed!', 'Match result & points have been updated.', [
+        {
+          text: 'View Match Summary',
+          onPress: () => router.replace(`/match/${match.id}` as any),
+        },
+      ]);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to complete match');
+    }
   };
 
   const bowlersList = [
@@ -211,30 +235,35 @@ export const ScoringScreen: React.FC = () => {
   ];
 
   const handleSelectBowler = (b: typeof bowlersList[0]) => {
-    const updatedBowler = {
-      ...match.activeBowler,
-      playerId: b.id,
-      name: b.name,
-      shortName: b.name,
-    };
-    const updatedMatch = {
-      ...match,
-      activeBowler: updatedBowler,
-    };
-    dispatch({
-      type: 'matches/handleRealtimeScoreUpdate',
-      payload: { match: updatedMatch },
+    cricketApi.changeBowler(match.id, b.name, b.id).then((updated) => {
+      dispatch({
+        type: 'matches/handleRealtimeScoreUpdate',
+        payload: { match: updated },
+      });
+      dispatch(setShowBowlerModal(false));
     });
-    dispatch(setShowBowlerModal(false));
   };
 
   const isTeam1Batting = match.battingTeamId === match.team1.id;
   const battingTeam = isTeam1Batting ? match.team1 : match.team2;
-  const progressPercent = Math.min(100, Math.round((battingTeam.overs / 20) * 100));
+  const maxOvers = battingTeam.maxOvers || 20;
+  const progressPercent = Math.min(100, Math.round((battingTeam.overs / maxOvers) * 100));
 
   return (
     <View style={styles.container}>
-      <Header showBack title="Live Scorer" />
+      <Header
+        showBack
+        title="Live Scoring Console"
+        rightAction={
+          <TouchableOpacity
+            style={styles.endMatchHeaderBtn}
+            onPress={() => setShowEndMatchModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.endMatchHeaderBtnText}>END MATCH</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
         {/* Top Match Telemetry Banner */}
@@ -244,10 +273,12 @@ export const ScoringScreen: React.FC = () => {
               <View style={styles.livePulse} />
               <Text style={styles.bannerBadgeText}>Innings {match.currentInnings} Live</Text>
               <Text style={styles.bulletDot}>•</Text>
-              <Text style={styles.targetText}>Target: {match.target || 179}</Text>
+              <Text style={styles.targetText}>
+                {match.toss || 'Live Scorer Console'}
+              </Text>
             </View>
             <View style={styles.adminPill}>
-              <Text style={styles.adminPillText}>Admin Console</Text>
+              <Text style={styles.adminPillText}>Live Scoring</Text>
             </View>
           </View>
 
@@ -257,10 +288,14 @@ export const ScoringScreen: React.FC = () => {
               <Text style={styles.matchScoreText}>
                 {battingTeam.score}/{battingTeam.wickets}
               </Text>
+              <Text style={styles.crrText}>
+                CRR: {match.crr ? match.crr.toFixed(2) : '0.00'}
+                {match.target ? ` • Target: ${match.target}` : ''}
+              </Text>
             </View>
             <View style={styles.oversCol}>
               <Text style={styles.oversBigText}>{battingTeam.overs.toFixed(1)}</Text>
-              <Text style={styles.maxOversText}>/ 20.0 ov</Text>
+              <Text style={styles.maxOversText}>/ {maxOvers}.0 ov</Text>
             </View>
           </View>
 
@@ -290,16 +325,20 @@ export const ScoringScreen: React.FC = () => {
               Over {Math.floor(battingTeam.overs) + 1} Progression
             </Text>
             <Text style={styles.progressionRuns}>
-              {match.recentBalls.slice(-6).join(' • ')}
+              {match.recentBalls.length > 0 ? match.recentBalls.slice(-6).join(' • ') : 'Ready'}
             </Text>
           </View>
         </View>
 
-        {/* Scoring Keypad */}
+        {/* Full Scoring Keypad */}
         <ScoringKeypad
           onScoreBall={handleScoreBall}
           onUndo={handleUndo}
           onOpenWicketModal={() => dispatch(setShowWicketModal(true))}
+          onSwapStrike={handleSwitchStrike}
+          onEndOver={handleEndOver}
+          onRetireBatsman={() => setShowRetireModal(true)}
+          onSelectNewBatsman={() => setShowNewBatsmanModal(true)}
           canUndo={undoStack.length > 0}
           disabled={isSubmitting}
         />
@@ -319,7 +358,17 @@ export const ScoringScreen: React.FC = () => {
               Select dismissal for {match.activeBatters.striker.name}:
             </Text>
 
-            {(['caught', 'bowled', 'lbw', 'run_out', 'stumped'] as WicketType[]).map((type) => (
+            {(
+              [
+                'bowled',
+                'caught',
+                'run_out',
+                'lbw',
+                'stumped',
+                'hit_wicket',
+                'retired_hurt',
+              ] as WicketType[]
+            ).map((type) => (
               <TouchableOpacity
                 key={type}
                 style={[
@@ -348,14 +397,101 @@ export const ScoringScreen: React.FC = () => {
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleConfirmWicket}>
-                <Text style={styles.modalConfirmText}>Confirm Wicket</Text>
+                <Text style={styles.modalConfirmText}>Confirm Dismissal</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Bowler Selection Modal */}
+      {/* New Batsman Modal */}
+      <Modal
+        visible={showNewBatsmanModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNewBatsmanModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Select New Batsman</Text>
+            <Text style={styles.modalSubtitle}>Enter incoming batsman name:</Text>
+
+            <TextInput
+              style={styles.modalTextInput}
+              placeholder="e.g. Virat Kohli"
+              placeholderTextColor={Colors.onSurfaceVariant}
+              value={customPlayerName}
+              onChangeText={setCustomPlayerName}
+              autoFocus
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowNewBatsmanModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.modalActionConfirmBtn} onPress={handleAddNewBatsman}>
+                <Text style={styles.modalActionConfirmText}>Set Striker</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Retire Batsman Modal */}
+      <Modal
+        visible={showRetireModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRetireModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Retire Batsman</Text>
+            <Text style={styles.modalSubtitle}>Who is retiring hurt/out?</Text>
+
+            <View style={{ gap: 8 }}>
+              <TouchableOpacity
+                style={styles.retireSelectBtn}
+                onPress={() => handleRetireConfirm(true)}
+              >
+                <Text style={styles.retireSelectText}>
+                  Striker: {match.activeBatters.striker.name}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.retireSelectBtn}
+                onPress={() => handleRetireConfirm(false)}
+              >
+                <Text style={styles.retireSelectText}>
+                  Non-Striker: {match.activeBatters.nonStriker.name}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={[styles.modalTextInput, { marginTop: 8 }]}
+              placeholder="Replacement Batsman Name"
+              placeholderTextColor={Colors.onSurfaceVariant}
+              value={customPlayerName}
+              onChangeText={setCustomPlayerName}
+            />
+
+            <TouchableOpacity
+              style={[styles.modalCancelBtn, { marginTop: 10 }]}
+              onPress={() => setShowRetireModal(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Change Bowler Modal */}
       <Modal
         visible={showBowlerModal}
         transparent
@@ -364,8 +500,8 @@ export const ScoringScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Change Bowler</Text>
-            <Text style={styles.modalSubtitle}>Select bowler for the next delivery:</Text>
+            <Text style={styles.modalTitle}>Change Active Bowler</Text>
+            <Text style={styles.modalSubtitle}>Select bowler for next over delivery:</Text>
 
             {bowlersList.map((b) => (
               <TouchableOpacity
@@ -392,6 +528,68 @@ export const ScoringScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* End Match Modal */}
+      <Modal
+        visible={showEndMatchModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEndMatchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Conclude Match</Text>
+            <Text style={styles.modalSubtitle}>Select winner team and Man of the Match:</Text>
+
+            <View style={{ gap: 8, marginVertical: 6 }}>
+              <TouchableOpacity
+                style={[
+                  styles.wicketOption,
+                  (selectedWinnerId === match.team1.id || !selectedWinnerId) &&
+                    styles.wicketOptionSelected,
+                ]}
+                onPress={() => setSelectedWinnerId(match.team1.id)}
+              >
+                <Text style={styles.wicketOptionText}>{match.team1.name} Won</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.wicketOption,
+                  selectedWinnerId === match.team2.id && styles.wicketOptionSelected,
+                ]}
+                onPress={() => setSelectedWinnerId(match.team2.id)}
+              >
+                <Text style={styles.wicketOptionText}>{match.team2.name} Won</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.modalTextInput}
+              placeholder="Man of the Match Player Name"
+              placeholderTextColor={Colors.onSurfaceVariant}
+              value={manOfTheMatchName}
+              onChangeText={setManOfTheMatchName}
+            />
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowEndMatchModal(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalActionConfirmBtn}
+                onPress={handleCompleteMatch}
+              >
+                <Text style={styles.modalActionConfirmText}>Finish Match</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -400,6 +598,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.surface,
+  },
+  endMatchHeaderBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  endMatchHeaderBtnText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '800',
   },
   scrollBody: {
     flex: 1,
@@ -427,6 +638,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
   livePulse: {
     width: 6,
@@ -447,6 +659,7 @@ const styles = StyleSheet.create({
   targetText: {
     fontSize: 11,
     color: Colors.onSurfaceVariant,
+    flexShrink: 1,
   },
   adminPill: {
     backgroundColor: Colors.surfaceContainer,
@@ -466,14 +679,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   matchTitleText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: Colors.onSurface,
   },
   matchScoreText: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: Colors.primary,
+    marginTop: 2,
+  },
+  crrText: {
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '600',
     marginTop: 2,
   },
   oversCol: {
@@ -533,7 +752,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerHigh,
     borderRadius: 20,
     padding: 20,
-    gap: 10,
+    gap: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -546,6 +765,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.onSurfaceVariant,
     marginBottom: 4,
+  },
+  modalTextInput: {
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: 10,
+    padding: 12,
+    color: Colors.onSurface,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   wicketOption: {
     paddingVertical: 10,
@@ -565,6 +793,16 @@ const styles = StyleSheet.create({
   },
   wicketOptionTextSelected: {
     color: Colors.error,
+  },
+  retireSelectBtn: {
+    padding: 12,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: 10,
+  },
+  retireSelectText: {
+    color: Colors.onSurface,
+    fontWeight: '700',
+    fontSize: 13,
   },
   modalButtonsRow: {
     flexDirection: 'row',
@@ -594,6 +832,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: Colors.onError,
+  },
+  modalActionConfirmBtn: {
+    flex: 1.5,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalActionConfirmText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.onPrimary,
   },
   bowlerOptionItem: {
     flexDirection: 'row',

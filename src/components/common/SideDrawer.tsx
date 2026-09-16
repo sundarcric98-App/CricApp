@@ -31,16 +31,14 @@ export const SideDrawer: React.FC<SideDrawerProps> = ({ visible, onClose }) => {
   };
 
   const menuItems = [
-    { label: 'My Matches', icon: 'newspaper-outline', route: '/(tabs)' },
-    { label: 'My Tournaments', icon: 'trophy-outline', route: '/(tabs)/tournament' },
+    { label: 'Create Match', icon: 'add-circle-outline', route: '/match/create' },
+    { label: 'Create Tournament', icon: 'trophy-outline', route: '/tournament/create' },
+    { label: 'Create Team', icon: 'people-outline', route: '/team/create' },
+    { label: 'My Matches', icon: 'baseball-outline', route: '/(tabs)' },
+    { label: 'My Tournaments', icon: 'ribbon-outline', route: '/(tabs)/tournament' },
+    { label: 'My Teams', icon: 'shield-outline', route: '/teams' },
+    { label: 'Live Alerts', icon: 'notifications-outline', route: '/notifications' },
     { label: 'Profile', icon: 'person-circle-outline', route: '/(tabs)/profile' },
-    { label: 'My Teams', icon: 'people-outline', route: '/teams' },
-    { label: 'My Clubs', icon: 'shield-outline', route: '/teams' },
-    { label: 'Start Match', icon: 'play-circle-outline', route: '/scoring/match_blr_mum_01' },
-    { label: 'Create Tournament', icon: 'flag-outline', route: '/tournament/create' },
-    { label: 'Register As Club', icon: 'ribbon-outline', route: '/team/create' },
-    { label: 'Following', icon: 'heart-outline', route: '/(tabs)' },
-    { label: 'Settings', icon: 'settings-outline', route: '/(tabs)/profile' },
   ];
 
   return (

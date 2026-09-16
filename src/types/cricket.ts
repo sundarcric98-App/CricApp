@@ -1,8 +1,24 @@
-export type MatchStatus = 'live' | 'upcoming' | 'completed';
-export type MatchFormat = 'T20' | 'ODI' | 'TEST';
+export type MatchStatus = 'live' | 'upcoming' | 'completed' | 'abandoned';
+export type MatchFormat = 'T20' | 'ODI' | 'TEST' | 'CUSTOM';
 export type PlayerRole = 'batsman' | 'bowler' | 'allrounder' | 'wicketkeeper';
-export type BallType = 'dot' | 'run' | 'boundary4' | 'boundary6' | 'wicket' | 'wide' | 'noBall' | 'bye' | 'legBye';
-export type WicketType = 'bowled' | 'caught' | 'lbw' | 'run_out' | 'stumped' | 'hit_wicket';
+export type BallType =
+  | 'dot'
+  | 'run'
+  | 'boundary4'
+  | 'boundary6'
+  | 'wicket'
+  | 'wide'
+  | 'noBall'
+  | 'bye'
+  | 'legBye';
+export type WicketType =
+  | 'bowled'
+  | 'caught'
+  | 'lbw'
+  | 'run_out'
+  | 'stumped'
+  | 'hit_wicket'
+  | 'retired_hurt';
 
 export interface User {
   id: string;
@@ -46,6 +62,7 @@ export interface PlayerBowling {
 
 export interface PlayerCareerStats {
   matches: number;
+  innings?: number;
   runs: number;
   average: number;
   strikeRate: number;
@@ -53,8 +70,11 @@ export interface PlayerCareerStats {
   fifties: number;
   hundreds: number;
   wickets: number;
+  overs?: number;
   economy: number;
   bestBowling: string;
+  catches?: number;
+  stumpings?: number;
 }
 
 export interface Player {
@@ -66,10 +86,12 @@ export interface Player {
   role: PlayerRole;
   battingStyle: string;
   bowlingStyle: string;
-  country: string;
+  country?: string;
   jerseyNumber?: number;
+  isCaptain?: boolean;
+  isWicketkeeper?: boolean;
   careerStats: PlayerCareerStats;
-  recentInnings: {
+  recentInnings?: {
     match: string;
     runs: number;
     balls: number;
@@ -97,7 +119,14 @@ export interface Tournament {
   clubName?: string;
   city?: string;
   season?: string;
-  ballType?: 'Leather Ball' | 'Tennis Ball' | string;
+  ballType?: 'Leather Ball' | 'Tennis Ball' | 'Tape Ball' | string;
+  format?: string;
+  overs?: number;
+  maxTeams?: number;
+  winPoints?: number;
+  tiePoints?: number;
+  lossPoints?: number;
+  matchType?: string;
   startDate?: string;
   endDate?: string;
   bannerUrl?: string;
@@ -115,8 +144,26 @@ export interface CreateTournamentPayload {
   startDate?: string;
   endDate?: string;
   ballType: string;
+  overs?: number;
+  matchType?: string;
+  maxTeams?: number;
+  winPoints?: number;
+  tiePoints?: number;
+  lossPoints?: number;
   bannerUrl?: string;
   createdBy?: string;
+}
+
+export interface AddPlayerPayload {
+  name: string;
+  shortName?: string;
+  role: PlayerRole;
+  battingStyle?: string;
+  bowlingStyle?: string;
+  jerseyNumber?: number;
+  isCaptain?: boolean;
+  isWicketkeeper?: boolean;
+  isViceCaptain?: boolean;
 }
 
 export interface CreateTeamPayload {
@@ -125,6 +172,22 @@ export interface CreateTeamPayload {
   city?: string;
   logoUrl?: string;
   createdBy?: string;
+}
+
+export interface UpdateTeamPayload {
+  name?: string;
+  shortName?: string;
+  city?: string;
+  logoUrl?: string;
+}
+
+export interface PlayingXIPlayer {
+  id: string;
+  name: string;
+  role: PlayerRole;
+  isCaptain?: boolean;
+  isWicketkeeper?: boolean;
+  battingOrder?: number;
 }
 
 export interface TeamInnings {
@@ -217,6 +280,8 @@ export interface Match {
   toss: string;
   tossWinner: string;
   decision: 'bat' | 'bowl';
+  tossWinnerTeamId?: string;
+  tossDecision?: 'bat' | 'bowl';
   team1: {
     id: string;
     name: string;
@@ -250,8 +315,16 @@ export interface Match {
   };
   activeBowler: PlayerBowling;
   result?: string;
+  winnerTeamId?: string;
+  manOfTheMatchId?: string;
+  manOfTheMatchName?: string;
   startTime: string;
+  tournamentId?: string;
   tournamentGroup?: string;
+  playingXI?: {
+    team1: PlayingXIPlayer[];
+    team2: PlayingXIPlayer[];
+  };
 }
 
 export interface Scorecard {
@@ -271,6 +344,10 @@ export interface TournamentStanding {
   noResult: number;
   points: number;
   nrr: string;
+  runsScored?: number;
+  oversFaced?: number;
+  runsConceded?: number;
+  oversBowled?: number;
   recentForm: ('W' | 'L' | 'N')[];
   group: 'A' | 'B';
   qualified: boolean;
@@ -299,4 +376,29 @@ export interface BallEventPayload {
   nonStrikerId: string;
   bowlerId: string;
   commentary?: string;
+}
+
+export interface CreateMatchPayload {
+  teamAId?: string;
+  teamBId?: string;
+  teamAName: string;
+  teamBName: string;
+  teamAShortName?: string;
+  teamBShortName?: string;
+  teamALogo?: string;
+  teamBLogo?: string;
+  tournamentId?: string;
+  tournamentName?: string;
+  matchType?: string;
+  overs: number;
+  venue: string;
+  city?: string;
+  tossWinner: 'teamA' | 'teamB';
+  decision: 'bat' | 'bowl';
+  strikerName?: string;
+  nonStrikerName?: string;
+  bowlerName?: string;
+  team1PlayingXI?: PlayingXIPlayer[];
+  team2PlayingXI?: PlayingXIPlayer[];
+  createdBy?: string;
 }

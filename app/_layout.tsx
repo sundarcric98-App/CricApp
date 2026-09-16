@@ -42,8 +42,11 @@ export default function RootLayout() {
             <Stack.Screen name="auth/verify-otp" options={{ headerShown: false }} />
             <Stack.Screen name="auth/set-profile-pin" options={{ headerShown: false }} />
             <Stack.Screen name="tournament/create" options={{ headerShown: false }} />
+            <Stack.Screen name="tournament/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="team/create" options={{ headerShown: false }} />
+            <Stack.Screen name="team/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="teams/index" options={{ headerShown: false }} />
+            <Stack.Screen name="match/create" options={{ headerShown: false }} />
             <Stack.Screen name="match/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="commentary/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="scoring/[id]" options={{ headerShown: false }} />

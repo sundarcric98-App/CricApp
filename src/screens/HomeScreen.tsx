@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -17,6 +17,7 @@ import { MatchCardSkeleton } from '../components/common/LoadingSkeleton';
 import FeaturedMatchCard from '../components/match/FeaturedMatchCard';
 import MatchCard from '../components/match/MatchCard';
 import Colors from '../constants/colors';
+import cricketApi from '../services/api';
 import cricketSocket from '../services/socket';
 import {
   fetchMatches,
@@ -24,7 +25,7 @@ import {
   setSelectedStatus,
 } from '../store/matchSlice';
 import { useAppDispatch, useAppSelector } from '../store/store';
-import { Match, MatchStatus } from '../types/cricket';
+import { Match, MatchStatus, Tournament } from '../types/cricket';
 
 export const HomeScreen: React.FC = () => {
   const router = useRouter();
@@ -32,8 +33,16 @@ export const HomeScreen: React.FC = () => {
   const { matches, selectedStatus, loading } = useAppSelector((state) => state.matches);
   const currentUser = useAppSelector((state) => state.auth.currentUser);
 
-  const loadData = useCallback(() => {
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+
+  const loadData = useCallback(async () => {
     dispatch(fetchMatches(selectedStatus));
+    try {
+      const tourList = await cricketApi.getTournaments();
+      setTournaments(tourList);
+    } catch (e) {
+      console.log('Error loading tournaments', e);
+    }
   }, [dispatch, selectedStatus]);
 
   useEffect(() => {
@@ -74,6 +83,8 @@ export const HomeScreen: React.FC = () => {
     dispatch(fetchMatches(status));
   };
 
+  const latestTournament = tournaments.length > 0 ? tournaments[0] : null;
+
   return (
     <View style={styles.container}>
       <Header />
@@ -92,17 +103,30 @@ export const HomeScreen: React.FC = () => {
           />
         }
       >
-        {/* Matches Section Header matching Screenshot 1 */}
+        {/* Matches Section Header with Create Match Action */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Matches</Text>
-          <TouchableOpacity
-            style={styles.chevronButton}
-            onPress={() => router.push('/(tabs)/tournament' as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-forward" size={18} color="#0F172A" />
-            <Ionicons name="chevron-forward" size={18} color="#0F172A" style={{ marginLeft: -12 }} />
-          </TouchableOpacity>
+          <View style={styles.sectionTitleWithCount}>
+            <Text style={styles.sectionTitle}>Matches</Text>
+          </View>
+          <View style={styles.headerActionsRow}>
+            <TouchableOpacity
+              style={styles.createActionBtn}
+              onPress={() => router.push('/match/create' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.createActionText}>Create Match</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.chevronButton}
+              onPress={() => router.push('/(tabs)/tournament' as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-forward" size={18} color="#0F172A" />
+              <Ionicons name="chevron-forward" size={18} color="#0F172A" style={{ marginLeft: -12 }} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Segmented Status Tabs */}
@@ -124,7 +148,7 @@ export const HomeScreen: React.FC = () => {
                   selectedStatus === 'live' && styles.statusTabTextActive,
                 ]}
               >
-                Live ({liveMatches.length || 2})
+                Live ({liveMatches.length})
               </Text>
             </TouchableOpacity>
 
@@ -139,7 +163,7 @@ export const HomeScreen: React.FC = () => {
                   selectedStatus === 'upcoming' && styles.statusTabTextActive,
                 ]}
               >
-                Upcoming ({upcomingMatches.length || 4})
+                Upcoming ({upcomingMatches.length})
               </Text>
             </TouchableOpacity>
 
@@ -154,7 +178,7 @@ export const HomeScreen: React.FC = () => {
                   selectedStatus === 'completed' && styles.statusTabTextActive,
                 ]}
               >
-                Completed ({completedMatches.length || 6})
+                Completed ({completedMatches.length})
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -170,11 +194,13 @@ export const HomeScreen: React.FC = () => {
         ) : (
           <EmptyState
             title={`No ${selectedStatus} matches`}
-            description="There are currently no matches scheduled in this category."
+            description="Create a new match or start live scoring right away."
+            actionLabel="Create Match"
+            onAction={() => router.push('/match/create' as any)}
           />
         )}
 
-        {/* Profile Card Section matching Screenshot 1 */}
+        {/* Profile Card Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Profile</Text>
         </View>
@@ -188,7 +214,9 @@ export const HomeScreen: React.FC = () => {
           <View style={styles.profileAvatarBox}>
             <Image
               source={{
-                uri: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=256&q=80',
+                uri:
+                  currentUser?.profileImage ||
+                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
               }}
               style={styles.profileShieldImage}
             />
@@ -207,60 +235,95 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.statsRow}>
               <View style={styles.statCol}>
                 <Text style={styles.statLabel}>Matches</Text>
-                <Text style={styles.statValue}>4</Text>
+                <Text style={styles.statValue}>{matches.length}</Text>
               </View>
               <View style={styles.statCol}>
-                <Text style={styles.statLabel}>Runs</Text>
-                <Text style={styles.statValue}>13</Text>
+                <Text style={styles.statLabel}>Tournaments</Text>
+                <Text style={styles.statValue}>{tournaments.length}</Text>
               </View>
             </View>
           </View>
         </TouchableOpacity>
 
-        {/* Tournaments Section matching Screenshot 1 */}
+        {/* Tournaments Section */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Tournaments</Text>
-          <TouchableOpacity
-            style={styles.chevronButton}
-            onPress={() => router.push('/(tabs)/tournament' as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-forward" size={18} color="#0F172A" />
-            <Ionicons name="chevron-forward" size={18} color="#0F172A" style={{ marginLeft: -12 }} />
-          </TouchableOpacity>
+          <View style={styles.headerActionsRow}>
+            <TouchableOpacity
+              style={styles.createActionBtn}
+              onPress={() => router.push('/tournament/create' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={16} color="#FFFFFF" />
+              <Text style={styles.createActionText}>Create Tournament</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.chevronButton}
+              onPress={() => router.push('/(tabs)/tournament' as any)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-forward" size={18} color="#0F172A" />
+              <Ionicons name="chevron-forward" size={18} color="#0F172A" style={{ marginLeft: -12 }} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.tournamentBannerCard}
-          onPress={() => router.push('/(tabs)/tournament' as any)}
-          activeOpacity={0.9}
-        >
-          <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
-            }}
-            style={styles.tournamentBannerImg}
-          />
-          <View style={styles.bannerOverlay}>
-            <View style={styles.bannerTagRow}>
-              <View style={styles.seasonTag}>
-                <Text style={styles.seasonTagText}>SEASON - 10</Text>
+        {latestTournament ? (
+          <TouchableOpacity
+            style={styles.tournamentBannerCard}
+            onPress={() => router.push('/(tabs)/tournament' as any)}
+            activeOpacity={0.9}
+          >
+            <Image
+              source={{
+                uri:
+                  latestTournament.bannerUrl ||
+                  'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',
+              }}
+              style={styles.tournamentBannerImg}
+            />
+            <View style={styles.bannerOverlay}>
+              <View style={styles.bannerTagRow}>
+                <View style={styles.seasonTag}>
+                  <Text style={styles.seasonTagText}>{latestTournament.season || '2026'}</Text>
+                </View>
+                <View style={styles.teamsLimitTag}>
+                  <Text style={styles.teamsLimitTagText}>{latestTournament.ballType || 'LEATHER BALL'}</Text>
+                </View>
               </View>
-              <View style={styles.teamsLimitTag}>
-                <Text style={styles.teamsLimitTagText}>08 TEAMS ONLY</Text>
-              </View>
-            </View>
 
-            <Text style={styles.bannerTournamentTitle}>MADATUGAMA FRIENDSHIP TROPHY</Text>
-            <Text style={styles.bannerDateText}>05TH SEP 2026 (SATURDAY)</Text>
-          </View>
-        </TouchableOpacity>
+              <Text style={styles.bannerTournamentTitle}>{latestTournament.name}</Text>
+              <Text style={styles.bannerDateText}>
+                {latestTournament.startDate ? `${latestTournament.startDate} • ` : ''}
+                {latestTournament.clubName || latestTournament.city || 'Championship'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.emptyTournamentCard}
+            onPress={() => router.push('/tournament/create' as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="trophy-outline" size={32} color="#00695C" />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.emptyTournamentTitle}>Create Your First Tournament</Text>
+              <Text style={styles.emptyTournamentSubtitle}>
+                Add teams, schedule matches and manage points table
+              </Text>
+            </View>
+            <View style={styles.smallPlusBtn}>
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Secondary matches if any */}
-        {secondaryMatches.length > 0 && (
+        {secondaryMatches.length > 1 && (
           <View style={{ marginTop: 16 }}>
             <Text style={styles.sectionTitleSmall}>Other Matches</Text>
-            {secondaryMatches.map((m) => (
+            {secondaryMatches.slice(1).map((m) => (
               <MatchCard key={m.id} match={m} />
             ))}
           </View>
@@ -289,6 +352,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 10,
   },
+  sectionTitleWithCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -299,6 +367,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
     marginBottom: 8,
+  },
+  headerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  createActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#00695C',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    gap: 4,
+  },
+  createActionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   chevronButton: {
     flexDirection: 'row',
@@ -343,7 +430,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
   },
-  // Profile Card Widget styles matching Screenshot 1
+  // Profile Card Widget styles
   profileWidgetCard: {
     flexDirection: 'row',
     height: 110,
@@ -370,7 +457,7 @@ const styles = StyleSheet.create({
   },
   profileStatsBox: {
     flex: 1,
-    backgroundColor: '#00695C', // Teal tone matching Screenshot 1
+    backgroundColor: '#00695C',
     paddingHorizontal: 18,
     paddingVertical: 12,
     justifyContent: 'center',
@@ -419,7 +506,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: 2,
   },
-  // Tournaments Banner matching Screenshot 1
+  // Tournaments Banner
   tournamentBannerCard: {
     width: '100%',
     height: 190,
@@ -477,6 +564,34 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#D4AF37',
     marginTop: 3,
+  },
+  emptyTournamentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+    gap: 14,
+  },
+  emptyTournamentTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  emptyTournamentSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  smallPlusBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#00695C',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

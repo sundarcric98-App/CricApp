@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -27,7 +27,7 @@ export const TeamsScreen: React.FC = () => {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     setLoading(true);
     try {
       const data = await cricketApi.getTeams(currentUser?.id);
@@ -37,11 +37,13 @@ export const TeamsScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadTeams();
   }, [currentUser?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTeams();
+    }, [loadTeams])
+  );
 
   const handleTabChange = (tab: 'Statistics' | 'Matches' | 'Teams' | 'Tournaments') => {
     setActiveTab(tab);
@@ -164,7 +166,11 @@ export const TeamsScreen: React.FC = () => {
               />
             }
             renderItem={({ item }) => (
-              <View style={styles.teamCard}>
+              <TouchableOpacity
+                style={styles.teamCard}
+                onPress={() => router.push(`/team/${item.id}` as any)}
+                activeOpacity={0.85}
+              >
                 <Image
                   source={{
                     uri:
@@ -183,13 +189,13 @@ export const TeamsScreen: React.FC = () => {
                     </View>
                   </View>
                   <Text style={styles.teamMeta}>
-                    {item.shortName} • {item.city || 'Club'} • {item.playersCount || 11} Squad Members
+                    {item.shortName} • {item.city || 'Club'} • {item.playersCount || 0} Players
                   </Text>
                 </View>
-                <TouchableOpacity style={styles.teamActionBtn}>
+                <View style={styles.teamActionBtn}>
                   <Ionicons name="chevron-forward" size={20} color={Colors.onSurfaceVariant} />
-                </TouchableOpacity>
-              </View>
+                </View>
+              </TouchableOpacity>
             )}
           />
         </View>

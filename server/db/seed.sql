@@ -24,71 +24,71 @@ VALUES
 ON CONFLICT (user_id) DO NOTHING;
 
 -- 3. SEED TEAMS
-INSERT INTO teams (id, name, logo_url, created_by)
+INSERT INTO teams (id, name, short_name, logo_url, created_by)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Bengaluru Royals', 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80', '11111111-1111-1111-1111-111111111111'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mumbai Warriors', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80', '22222222-2222-2222-2222-222222222222'),
-    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Chennai Kings', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80', '11111111-1111-1111-1111-111111111111'),
-    ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'Kolkata Knights', 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80', '22222222-2222-2222-2222-222222222222')
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Bengaluru Royals', 'RCB', 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80', '11111111-1111-1111-1111-111111111111'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Mumbai Warriors', 'MI', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80', '22222222-2222-2222-2222-222222222222'),
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'Chennai Kings', 'CSK', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80', '11111111-1111-1111-1111-111111111111'),
+    ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'Kolkata Knights', 'KKR', 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80', '22222222-2222-2222-2222-222222222222')
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. SEED TEAM PLAYERS
-INSERT INTO team_players (team_id, user_id, role)
+INSERT INTO team_players (team_id, user_id, name, role)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'batsman'),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'allrounder'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'batsman'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '33333333-3333-3333-3333-333333333333', 'bowler'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '55555555-5555-5555-5555-555555555555', 'batsman')
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'Virat Kohli', 'batsman'),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '44444444-4444-4444-4444-444444444444', 'Glenn Maxwell', 'allrounder'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222', 'Rohit Sharma', 'batsman'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '33333333-3333-3333-3333-333333333333', 'Jasprit Bumrah', 'bowler'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '55555555-5555-5555-5555-555555555555', 'Suryakumar Yadav', 'batsman')
 ON CONFLICT (team_id, user_id) DO NOTHING;
 
 -- 5. SEED TOURNAMENTS
-INSERT INTO tournaments (id, name, location, match_type, overs, start_date, end_date, banner_url, created_by)
+INSERT INTO tournaments (id, name, code, city, location, match_type, format, overs, start_date, end_date, banner_url, created_by)
 VALUES
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'T20 Premier League 2025', 'India', 'T20', 20, '2025-04-01', '2025-05-30', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&q=80', '11111111-1111-1111-1111-111111111111')
+    ('99999999-9999-9999-9999-999999999999', 'T20 Premier League 2025', 'T20PL25', 'Mumbai', 'India', 'T20', 'T20', 20, '2025-04-01', '2025-05-30', 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&q=80', '11111111-1111-1111-1111-111111111111')
 ON CONFLICT (id) DO NOTHING;
 
 -- 6. SEED TOURNAMENT TEAMS & POINTS TABLE
 INSERT INTO tournament_teams (tournament_id, team_id)
 VALUES
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'dddddddd-dddd-dddd-dddd-dddddddddddd')
+    ('99999999-9999-9999-9999-999999999999', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+    ('99999999-9999-9999-9999-999999999999', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
+    ('99999999-9999-9999-9999-999999999999', 'cccccccc-cccc-cccc-cccc-cccccccccccc'),
+    ('99999999-9999-9999-9999-999999999999', 'dddddddd-dddd-dddd-dddd-dddddddddddd')
 ON CONFLICT (tournament_id, team_id) DO NOTHING;
 
 INSERT INTO points_table (tournament_id, team_id, matches, wins, losses, ties, points, nrr)
 VALUES
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 14, 10, 4, 0, 20, 0.892),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 14, 9, 5, 0, 18, 0.640),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 14, 8, 5, 1, 17, 0.415),
-    ('tttttttt-tttt-tttt-tttt-tttttttttttt', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 14, 8, 6, 0, 16, 0.320)
+    ('99999999-9999-9999-9999-999999999999', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 14, 10, 4, 0, 20, 0.892),
+    ('99999999-9999-9999-9999-999999999999', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 14, 9, 5, 0, 18, 0.640),
+    ('99999999-9999-9999-9999-999999999999', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 14, 8, 5, 1, 17, 0.415),
+    ('99999999-9999-9999-9999-999999999999', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 14, 8, 6, 0, 16, 0.320)
 ON CONFLICT (tournament_id, team_id) DO NOTHING;
 
 -- 7. SEED MATCHES
 INSERT INTO matches (id, tournament_id, team_a_id, team_b_id, match_type, overs, venue, start_time, status, created_by)
 VALUES
-    ('m1111111-1111-1111-1111-111111111111', 'tttttttt-tttt-tttt-tttt-tttttttttttt', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'T20', 20, 'Wankhede Stadium, Mumbai', now(), 'live', '11111111-1111-1111-1111-111111111111'),
-    ('m2222222-2222-2222-2222-222222222222', 'tttttttt-tttt-tttt-tttt-tttttttttttt', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'T20', 20, 'M. A. Chidambaram Stadium, Chennai', now() + interval '2 hours', 'upcoming', '11111111-1111-1111-1111-111111111111')
+    ('00000000-0000-0000-0000-000000000001', '99999999-9999-9999-9999-999999999999', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'T20', 20, 'Wankhede Stadium, Mumbai', now(), 'live', '11111111-1111-1111-1111-111111111111'),
+    ('00000000-0000-0000-0000-000000000002', '99999999-9999-9999-9999-999999999999', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'T20', 20, 'M. A. Chidambaram Stadium, Chennai', now() + interval '2 hours', 'upcoming', '11111111-1111-1111-1111-111111111111')
 ON CONFLICT (id) DO NOTHING;
 
--- 8. SEED INNINGS (For live match m1111111-1111-1111-1111-111111111111)
-INSERT INTO innings (id, match_id, inning_no, batting_team_id, runs, wickets, overs, extras)
+-- 8. SEED INNINGS (For live match 00000000-0000-0000-0000-000000000001)
+INSERT INTO innings (id, match_id, inning_no, batting_team_id, bowling_team_id, runs, wickets, overs, extras)
 VALUES
-    ('i1111111-1111-1111-1111-111111111111', 'm1111111-1111-1111-1111-111111111111', 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 178, 4, 20.0, 10),
-    ('i2222222-2222-2222-2222-222222222222', 'm1111111-1111-1111-1111-111111111111', 2, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 145, 3, 18.2, 8)
+    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 178, 4, 20.0, 10),
+    ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 2, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 145, 3, 18.2, 8)
 ON CONFLICT (match_id, inning_no) DO NOTHING;
 
 -- 9. SEED BALL EVENTS
 INSERT INTO ball_events (id, inning_id, over, ball, batsman_id, bowler_id, non_striker_id, runs_scored, extra_type, is_wicket, wicket_type)
 VALUES
-    ('b1111111-1111-1111-1111-111111111111', 'i2222222-2222-2222-2222-222222222222', 18, 1, '11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444', 1, null, false, null),
-    ('b2222222-2222-2222-2222-222222222222', 'i2222222-2222-2222-2222-222222222222', 18, 2, '44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 1, null, false, null)
+    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', 18, 1, '11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444', 1, null, false, null),
+    ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 18, 2, '44444444-4444-4444-4444-444444444444', '33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 1, null, false, null)
 ON CONFLICT (id) DO NOTHING;
 
 -- 10. SEED MATCH COMMENTS (COMMENTARY)
-INSERT INTO match_comments (id, match_id, ball_event_id, comment)
+INSERT INTO match_comments (id, match_id, ball_event_id, over_text, comment)
 VALUES
-    ('c1111111-1111-1111-1111-111111111111', 'm1111111-1111-1111-1111-111111111111', 'b1111111-1111-1111-1111-111111111111', 'Back of a length delivery angling in tightly, tapped deftly toward backward point. Quick single taken.'),
-    ('c2222222-2222-2222-2222-222222222222', 'm1111111-1111-1111-1111-111111111111', 'b2222222-2222-2222-2222-222222222222', 'Yorker on middle stump! Dug out safely to deep mid-wicket for a single. Rotates the strike cleanly.')
+    ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', '18.1', 'Back of a length delivery angling in tightly, tapped deftly toward backward point. Quick single taken.'),
+    ('30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002', '18.2', 'Yorker on middle stump! Dug out safely to deep mid-wicket for a single. Rotates the strike cleanly.')
 ON CONFLICT (id) DO NOTHING;

@@ -1,16 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../components/common/Header';
 import CommentaryCard from '../components/commentary/CommentaryCard';
+import EmptyState from '../components/common/EmptyState';
+import Header from '../components/common/Header';
 import RecentBallsRibbon from '../components/match/RecentBallsRibbon';
 import ScoreHeader, { MatchDetailTab } from '../components/match/ScoreHeader';
 import BatsmanTable from '../components/scorecard/BatsmanTable';
@@ -22,7 +26,7 @@ import { useAppDispatch, useAppSelector } from '../store/store';
 
 export const MatchDetailScreen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const matchId = (Array.isArray(id) ? id[0] : id) || 'match_blr_mum_01';
+  const matchId = Array.isArray(id) ? id[0] : id;
   const router = useRouter();
 
   const dispatch = useAppDispatch();
@@ -30,118 +34,72 @@ export const MatchDetailScreen: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<MatchDetailTab>('scorecard');
   const [commentaryFilter, setCommentaryFilter] = useState<'all' | 'boundary' | 'wicket'>('all');
-  const [activeInningsView, setActiveInningsView] = useState<1 | 2>(2);
+  const [activeInningsView, setActiveInningsView] = useState<1 | 2>(1);
 
   useEffect(() => {
-    dispatch(fetchMatchDetails(matchId));
+    if (matchId) {
+      dispatch(fetchMatchDetails(matchId));
+    }
   }, [dispatch, matchId]);
 
   const handleRefresh = () => {
-    dispatch(fetchMatchDetails(matchId));
+    if (matchId) {
+      dispatch(fetchMatchDetails(matchId));
+    }
   };
 
   const handleFilterChange = (filter: 'all' | 'boundary' | 'wicket') => {
     setCommentaryFilter(filter);
-    dispatch(fetchCommentary({ matchId, filter: filter === 'all' ? undefined : filter }));
+    if (matchId) {
+      dispatch(fetchCommentary({ matchId, filter: filter === 'all' ? undefined : filter }));
+    }
   };
 
-  if (!currentMatch && loading) {
+  const handleShareScorecard = async () => {
+    if (!currentMatch) return;
+    try {
+      const summary = `🏏 ${currentMatch.title} (${currentMatch.seriesName})\n` +
+        `📍 ${currentMatch.venue}, ${currentMatch.city}\n` +
+        `🪙 ${currentMatch.toss || 'Toss not recorded'}\n` +
+        `📊 ${currentMatch.team1.shortName}: ${currentMatch.team1.score}/${currentMatch.team1.wickets} (${currentMatch.team1.overs.toFixed(1)} ov)\n` +
+        `📊 ${currentMatch.team2.shortName}: ${currentMatch.team2.score}/${currentMatch.team2.wickets} (${currentMatch.team2.overs.toFixed(1)} ov)\n` +
+        `🏆 Result: ${currentMatch.result || 'Match in progress'}\n` +
+        (currentMatch.manOfTheMatchName ? `🌟 Player of the Match: ${currentMatch.manOfTheMatchName}\n` : '') +
+        `Scored on CricLiveX 🚀`;
+
+      await Share.share({
+        message: summary,
+        title: `${currentMatch.title} Scorecard`,
+      });
+    } catch (err: any) {
+      Alert.alert('Share', err.message || 'Could not share scorecard');
+    }
+  };
+
+  if (!currentMatch) {
     return (
       <View style={styles.loadingContainer}>
         <Header showBack title="Match Detail" />
         <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading match scorecard...</Text>
+          {loading ? (
+            <>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Loading match scorecard...</Text>
+            </>
+          ) : (
+            <EmptyState
+              title="Match Not Found"
+              description="This match could not be found or has not started yet."
+              actionLabel="Back to Matches"
+              onAction={() => router.replace('/(tabs)' as any)}
+            />
+          )}
         </View>
       </View>
     );
   }
 
-  const match = currentMatch || {
-    id: matchId,
-    title: 'BLR vs MUM',
-    seriesName: 'T20 Premier League 2025',
-    matchNumber: '2nd Semi Final',
-    venue: 'Wankhede Stadium',
-    city: 'Mumbai',
-    status: 'live' as const,
-    format: 'T20' as const,
-    currentInnings: 2 as const,
-    toss: 'Bengaluru Royals won toss & elected to field',
-    tossWinner: 'Bengaluru Royals',
-    decision: 'bowl' as const,
-    team1: {
-      id: 'team_mum',
-      name: 'Mumbai Warriors',
-      shortName: 'MUM',
-      logo: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
-      score: 178,
-      wickets: 4,
-      overs: 20.0,
-      maxOvers: 20,
-    },
-    team2: {
-      id: 'team_blr',
-      name: 'Bengaluru Royals',
-      shortName: 'BLR',
-      logo: 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80',
-      score: 145,
-      wickets: 3,
-      overs: 18.2,
-      maxOvers: 20,
-    },
-    battingTeamId: 'team_blr',
-    bowlingTeamId: 'team_mum',
-    target: 179,
-    equation: 'Need 34 runs in 10 balls',
-    crr: 7.91,
-    rrr: 20.4,
-    recentBalls: ['1', '2', '0', '4', 'W', '6', '1', '1'],
-    activeBatters: {
-      striker: {
-        playerId: 'p_kohli',
-        name: 'V. Kohli (c)*',
-        shortName: 'V Kohli',
-        runs: 68,
-        balls: 42,
-        fours: 6,
-        sixes: 2,
-        strikeRate: 161.9,
-        isStriker: true,
-        isNonStriker: false,
-        isOut: false,
-      },
-      nonStriker: {
-        playerId: 'p_maxwell',
-        name: 'G. Maxwell',
-        shortName: 'G Maxwell',
-        runs: 24,
-        balls: 11,
-        fours: 2,
-        sixes: 2,
-        strikeRate: 218.2,
-        isStriker: false,
-        isNonStriker: true,
-        isOut: false,
-      },
-    },
-    activeBowler: {
-      playerId: 'p_bumrah',
-      name: 'J. Bumrah',
-      shortName: 'J Bumrah',
-      overs: 3.2,
-      oversInBalls: 20,
-      maidens: 0,
-      runs: 28,
-      wickets: 2,
-      economy: 8.4,
-      dots: 10,
-      wides: 1,
-      noBalls: 0,
-      isCurrentBowler: true,
-    },
-    startTime: '2025-05-24T19:30:00Z',
-  };
+  const match = currentMatch;
 
   const currentInningsData =
     activeInningsView === 2 ? scorecard?.innings2 : scorecard?.innings1;
@@ -157,13 +115,23 @@ export const MatchDetailScreen: React.FC = () => {
         showBack
         title="Match Detail"
         rightAction={
-          <TouchableOpacity
-            style={styles.adminScorerBtn}
-            onPress={() => router.push(`/scoring/${match.id}` as any)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.adminScorerText}>Scorer</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity
+              style={styles.shareHeaderBtn}
+              onPress={handleShareScorecard}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="share-social-outline" size={18} color={Colors.onSurface} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.adminScorerBtn}
+              onPress={() => router.push(`/scoring/${match.id}` as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.adminScorerText}>Scorer</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -186,6 +154,32 @@ export const MatchDetailScreen: React.FC = () => {
           />
         }
       >
+        {/* Match Result & Man of the Match Banner */}
+        {match.status === 'completed' && (
+          <View style={styles.completedMatchBanner}>
+            <View style={styles.winnerTitleRow}>
+              <Ionicons name="trophy" size={20} color="#FFB95F" />
+              <Text style={styles.winnerText}>
+                {match.result || `${match.winnerTeamId ? 'Match Completed' : 'Match Drawn'}`}
+              </Text>
+            </View>
+            {match.manOfTheMatchName && (
+              <View style={styles.momBadge}>
+                <Ionicons name="star" size={14} color="#4EDEAF" />
+                <Text style={styles.momText}>
+                  Player of the Match: {match.manOfTheMatchName}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Toss Summary Banner */}
+        <View style={styles.tossBanner}>
+          <Ionicons name="information-circle-outline" size={16} color="#00695C" />
+          <Text style={styles.tossBannerText}>{match.toss || 'Match in progress'}</Text>
+        </View>
+
         {activeTab === 'scorecard' && (
           <View style={styles.tabSection}>
             {/* Over Timeline Live Bar */}
@@ -193,9 +187,11 @@ export const MatchDetailScreen: React.FC = () => {
               <View style={styles.overTimelineBar}>
                 <View style={styles.overMetaRow}>
                   <Text style={styles.overMetaTitle}>
-                    Over {Math.floor(match.team2.overs) + 1} Live • {match.activeBowler.name} to {match.team2.shortName}
+                    Over {Math.floor(match.team2.overs) + 1} Live • {match.activeBowler.name}
                   </Text>
-                  <Text style={styles.overRunsCount}>5 Runs this over</Text>
+                  <Text style={styles.overRunsCount}>
+                    {match.recentBalls.slice(-6).join(' • ') || 'Ready'}
+                  </Text>
                 </View>
                 <RecentBallsRibbon balls={match.recentBalls} label="" size="sm" />
               </View>
@@ -203,24 +199,6 @@ export const MatchDetailScreen: React.FC = () => {
 
             {/* Innings Selector Segment */}
             <View style={styles.inningsSwitchRow}>
-              <TouchableOpacity
-                style={[
-                  styles.inningsPill,
-                  activeInningsView === 2 && styles.inningsPillActive,
-                ]}
-                onPress={() => setActiveInningsView(2)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.inningsPillText,
-                    activeInningsView === 2 && styles.inningsPillTextActive,
-                  ]}
-                >
-                  {match.team2.shortName} (2nd Inn)
-                </Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
                   styles.inningsPill,
@@ -236,6 +214,24 @@ export const MatchDetailScreen: React.FC = () => {
                   ]}
                 >
                   {match.team1.shortName} (1st Inn)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.inningsPill,
+                  activeInningsView === 2 && styles.inningsPillActive,
+                ]}
+                onPress={() => setActiveInningsView(2)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.inningsPillText,
+                    activeInningsView === 2 && styles.inningsPillTextActive,
+                  ]}
+                >
+                  {match.team2.shortName} (2nd Inn)
                 </Text>
               </TouchableOpacity>
             </View>
@@ -347,14 +343,16 @@ export const MatchDetailScreen: React.FC = () => {
             <View style={styles.lineupCard}>
               <Text style={styles.lineupTeamTitle}>{match.team1.name} Playing XI</Text>
               <Text style={styles.lineupPlayers}>
-                Rohit Sharma (c), Ishan Kishan (wk), Suryakumar Yadav, Tilak Varma, Hardik Pandya, Tim David, Romario Shepherd, Piyush Chawla, Gerald Coetzee, Jasprit Bumrah, Akash Madhwal
+                {match.playingXI?.team1?.map((p) => p.name).join(', ') ||
+                  `${match.activeBatters.striker.name}, ${match.activeBatters.nonStriker.name}, Top Order Batters, Spinners & Pace Bowlers`}
               </Text>
             </View>
 
             <View style={styles.lineupCard}>
               <Text style={styles.lineupTeamTitle}>{match.team2.name} Playing XI</Text>
               <Text style={styles.lineupPlayers}>
-                Faf du Plessis, Virat Kohli (c), Rajat Patidar, Glenn Maxwell, Cameron Green, Dinesh Karthik (wk), Mahipal Lomror, Karn Sharma, Lockie Ferguson, Mohammed Siraj, Yash Dayal
+                {match.playingXI?.team2?.map((p) => p.name).join(', ') ||
+                  `${match.activeBowler.name}, Opening Attack, Middle Order All-Rounders, Wicketkeeper`}
               </Text>
             </View>
           </View>
@@ -383,10 +381,18 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     fontSize: 14,
   },
+  shareHeaderBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainer,
+  },
   adminScorerBtn: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
   },
   adminScorerText: {
@@ -402,6 +408,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 32,
+    gap: 12,
+  },
+  completedMatchBanner: {
+    backgroundColor: 'rgba(255, 185, 95, 0.12)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 185, 95, 0.3)',
+    gap: 6,
+  },
+  winnerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  winnerText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  momBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  momText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4EDEAF',
+  },
+  tossBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerHigh,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  tossBannerText: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '600',
   },
   tabSection: {
     gap: 12,
@@ -440,7 +490,7 @@ const styles = StyleSheet.create({
   },
   inningsPill: {
     flex: 1,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -449,7 +499,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerHighest,
   },
   inningsPillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.onSurfaceVariant,
   },

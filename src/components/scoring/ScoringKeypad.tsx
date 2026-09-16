@@ -9,6 +9,10 @@ interface ScoringKeypadProps {
   onScoreBall: (ballType: BallType, runs: number, isExtra?: boolean, isWicket?: boolean) => void;
   onUndo: () => void;
   onOpenWicketModal: () => void;
+  onSwapStrike: () => void;
+  onEndOver: () => void;
+  onRetireBatsman: () => void;
+  onSelectNewBatsman: () => void;
   canUndo?: boolean;
   disabled?: boolean;
 }
@@ -17,11 +21,58 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
   onScoreBall,
   onUndo,
   onOpenWicketModal,
+  onSwapStrike,
+  onEndOver,
+  onRetireBatsman,
+  onSelectNewBatsman,
   canUndo = true,
   disabled = false,
 }) => {
   return (
     <View style={styles.keypadContainer}>
+      {/* Action Utility Bar: Swap Strike, End Over, Retire, New Batsman */}
+      <View style={styles.actionUtilityRow}>
+        <TouchableOpacity
+          style={styles.utilityActionBtn}
+          onPress={onSwapStrike}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="swap-horizontal" size={15} color={Colors.primary} />
+          <Text style={styles.utilityActionText}>Swap Strike</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.utilityActionBtn}
+          onPress={onEndOver}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="checkmark-circle-outline" size={15} color="#4EDEAF" />
+          <Text style={styles.utilityActionText}>End Over</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.utilityActionBtn}
+          onPress={onRetireBatsman}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="exit-outline" size={15} color="#FFB95F" />
+          <Text style={styles.utilityActionText}>Retire</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.utilityActionBtn}
+          onPress={onSelectNewBatsman}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="person-add-outline" size={15} color="#38BDF8" />
+          <Text style={styles.utilityActionText}>New Bat</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Row 1: Runs 0, 1, 2, 3 */}
       <View style={styles.buttonRow}>
         <View style={styles.buttonCell}>
@@ -62,7 +113,7 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
         </View>
       </View>
 
-      {/* Row 2: 4 (FOUR), 6 (SIX), OUT, WD (Wide) */}
+      {/* Row 2: 4 (FOUR), 5, 6 (SIX), OUT */}
       <View style={styles.buttonRow}>
         <View style={styles.buttonCell}>
           <ScoreButton
@@ -70,6 +121,15 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
             subLabel="Boundary"
             variant="boundary"
             onPress={() => onScoreBall('boundary4', 4)}
+            disabled={disabled}
+          />
+        </View>
+        <View style={styles.buttonCell}>
+          <ScoreButton
+            label="5"
+            subLabel="5 Runs"
+            variant="run"
+            onPress={() => onScoreBall('run', 5)}
             disabled={disabled}
           />
         </View>
@@ -91,6 +151,10 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
             disabled={disabled}
           />
         </View>
+      </View>
+
+      {/* Row 3: WD (Wide), NB (No Ball), LB (Leg Bye), BYE, UNDO */}
+      <View style={styles.buttonRow}>
         <View style={styles.buttonCell}>
           <ScoreButton
             label="WD"
@@ -100,10 +164,6 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
             disabled={disabled}
           />
         </View>
-      </View>
-
-      {/* Row 3: NB (No Ball), LB (Leg Bye), BYE, UNDO */}
-      <View style={styles.buttonRow}>
         <View style={styles.buttonCell}>
           <ScoreButton
             label="NB"
@@ -138,7 +198,7 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
             disabled={!canUndo || disabled}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-undo" size={20} color={canUndo ? Colors.secondary : Colors.outline} />
+            <Ionicons name="arrow-undo" size={18} color={canUndo ? Colors.secondary : Colors.outline} />
             <Text style={[styles.undoText, { color: canUndo ? Colors.secondary : Colors.outline }]}>
               UNDO
             </Text>
@@ -154,9 +214,31 @@ const styles = StyleSheet.create({
     gap: 8,
     marginVertical: 6,
   },
+  actionUtilityRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 2,
+  },
+  utilityActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerHigh,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  utilityActionText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
   buttonRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   buttonCell: {
     flex: 1,

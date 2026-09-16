@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import EmptyState from '../components/common/EmptyState';
 import Header from '../components/common/Header';
 import StandingsTable from '../components/tournament/StandingsTable';
 import Colors from '../constants/colors';
@@ -30,7 +31,7 @@ export const TournamentScreen: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
       const [tList] = await Promise.all([
@@ -43,11 +44,13 @@ export const TournamentScreen: React.FC = () => {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [dispatch]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const handleSegmentChange = (seg: 'Matches' | 'Teams' | 'Tournaments' | 'Clubs') => {
     setActiveSegment(seg);
@@ -77,7 +80,7 @@ export const TournamentScreen: React.FC = () => {
         }
       />
 
-      {/* Top Filter Pills matching screenshot 2 */}
+      {/* Top Filter Pills */}
       <View style={styles.tabsWrapper}>
         <TouchableOpacity
           style={[styles.tabPill, activeSegment === 'Matches' && styles.tabPillActive]}
@@ -116,13 +119,14 @@ export const TournamentScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Create Tournament Action Button matching screenshot 2 */}
+      {/* Create Tournament Action Button */}
       <View style={styles.actionRow}>
         <TouchableOpacity
           style={styles.createTournamentBtn}
           onPress={() => router.push('/tournament/create' as any)}
           activeOpacity={0.8}
         >
+          <Ionicons name="add" size={16} color="#334155" style={{ marginRight: 4 }} />
           <Text style={styles.createTournamentBtnText}>CREATE TOURNAMENT</Text>
         </TouchableOpacity>
       </View>
@@ -130,11 +134,20 @@ export const TournamentScreen: React.FC = () => {
       {/* Content Feed */}
       {viewMode === 'standings' ? (
         <View style={{ flex: 1, paddingHorizontal: 16 }}>
-          <StandingsTable
-            standings={tournamentStandings}
-            selectedGroup={selectedGroup}
-            onSelectGroup={(group) => dispatch(setSelectedGroup(group))}
-          />
+          {tournamentStandings.length > 0 ? (
+            <StandingsTable
+              standings={tournamentStandings}
+              selectedGroup={selectedGroup}
+              onSelectGroup={(group) => dispatch(setSelectedGroup(group))}
+            />
+          ) : (
+            <EmptyState
+              title="No Points Table Available"
+              description="Points table and standings will automatically update once tournament matches are scored."
+              actionLabel="Create Tournament"
+              onAction={() => router.push('/tournament/create' as any)}
+            />
+          )}
         </View>
       ) : (
         <FlatList
@@ -148,11 +161,19 @@ export const TournamentScreen: React.FC = () => {
               tintColor={Colors.primary}
             />
           }
+          ListEmptyComponent={
+            <EmptyState
+              title="No Tournaments Yet"
+              description="Create your first tournament to start registering teams and organizing fixtures."
+              actionLabel="Create Tournament"
+              onAction={() => router.push('/tournament/create' as any)}
+            />
+          }
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.tournamentCard}
               activeOpacity={0.9}
-              onPress={() => setViewMode('standings')}
+              onPress={() => router.push(`/tournament/${item.id}` as any)}
             >
               <Image
                 source={{
@@ -168,7 +189,7 @@ export const TournamentScreen: React.FC = () => {
               <View style={styles.cardContent}>
                 <View style={styles.badgeRow}>
                   <View style={styles.codeTag}>
-                    <Text style={styles.codeTagText}>{item.code || 'MADA8391'}</Text>
+                    <Text style={styles.codeTagText}>{item.code || 'TOUR2026'}</Text>
                   </View>
                   <View style={styles.ballTypeTag}>
                     <Text style={styles.ballTypeTagText}>{item.ballType || 'Tennis Ball'}</Text>
@@ -180,7 +201,7 @@ export const TournamentScreen: React.FC = () => {
                 </Text>
 
                 <Text style={styles.tournamentWinner}>
-                  {item.winnerTeam || `${item.clubName || 'Sundar Club'} • ${item.season || '2026'}`}
+                  {item.winnerTeam || `${item.clubName || 'Club'} • ${item.season || '2026'}`}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -194,7 +215,7 @@ export const TournamentScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF', // Clean aesthetic matching screenshot 2
+    backgroundColor: '#FFFFFF',
   },
   filterIconButton: {
     width: 36,
@@ -213,10 +234,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#CBD5E1', // Soft pill
+    backgroundColor: '#CBD5E1',
   },
   tabPillActive: {
-    backgroundColor: '#1E293B', // Dark active pill
+    backgroundColor: '#1E293B',
   },
   tabPillText: {
     fontSize: 12,
@@ -233,11 +254,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   createTournamentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -255,6 +278,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 32,
     gap: 16,
+    flexGrow: 1,
   },
   tournamentCard: {
     width: '100%',
