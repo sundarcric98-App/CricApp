@@ -2,6 +2,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import http from 'http';
+import supabase from './config/supabase';
 import authRoutes from './routes/authRoutes';
 import matchRoutes from './routes/matchRoutes';
 import playerRoutes from './routes/playerRoutes';
@@ -33,13 +34,31 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Health check
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
-    service: 'CricLiveX Express Backend',
-    timestamp: new Date().toISOString(),
-  });
+// Health check endpoints (/health & /api/health)
+app.get(['/health', '/api/health'], async (_req: Request, res: Response) => {
+  const start = Date.now();
+  try {
+    const { error } = await supabase.from('tournaments').select('id').limit(1);
+    const dbLatencyMs = Date.now() - start;
+
+    res.json({
+      status: error ? 'degraded' : 'healthy',
+      service: 'CricLiveX Backend Server',
+      database: error ? 'disconnected' : 'connected',
+      dbLatencyMs,
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+    });
+  } catch (err: any) {
+    res.json({
+      status: 'healthy',
+      service: 'CricLiveX Backend Server',
+      database: 'unreachable',
+      error: err.message,
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+    });
+  }
 });
 
 // API Routes

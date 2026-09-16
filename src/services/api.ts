@@ -6,6 +6,7 @@ import {
   CreateMatchPayload,
   CreateTeamPayload,
   CreateTournamentPayload,
+  HealthCheckResult,
   Match,
   MatchStatus,
   NotificationItem,
@@ -33,11 +34,22 @@ let statefulTeams: Team[] = [];
 let statefulTournamentTeams: Record<string, string[]> = {};
 let statefulTeamPlayers: Record<string, Player[]> = {};
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Centralized API Base URL Configuration
+export const DEFAULT_API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'https://cric-app-sigma.vercel.app/api';
 
-const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 5000,
+let currentBaseURL = DEFAULT_API_BASE_URL;
+
+export const getBaseURL = (): string => currentBaseURL;
+
+export const setBaseURL = (newURL: string): void => {
+  currentBaseURL = newURL;
+  apiClient.defaults.baseURL = newURL;
+};
+
+export const apiClient: AxiosInstance = axios.create({
+  baseURL: currentBaseURL,
+  timeout: 6000,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -945,7 +957,7 @@ export const cricketApi = {
       name: payload.bowlerName || 'Opening Bowler',
       shortName: (payload.bowlerName || 'Opening Bowler')
         .split(' ')
-        .map((w, i) => (i === 0 ? w[0] + '.' : w))
+        .map((w: string, i: number) => (i === 0 ? w[0] + '.' : w))
         .join(' '),
       overs: 0,
       oversInBalls: 0,
@@ -1460,6 +1472,47 @@ export const cricketApi = {
 
   async getNotifications(): Promise<NotificationItem[]> {
     return [];
+  },
+
+  // ==========================================
+  // 5. SYSTEM HEALTH CHECK & CONNECTIVITY
+  // ==========================================
+
+  async healthCheck(): Promise<HealthCheckResult> {
+    const start = Date.now();
+    let supabaseConnected = false;
+    let dbLatencyMs = 0;
+
+    try {
+      const { data, error } = await supabase.from('tournaments').select('id').limit(1);
+      dbLatencyMs = Date.now() - start;
+      supabaseConnected = !error;
+    } catch {
+      supabaseConnected = false;
+    }
+
+    // Also check backend gateway
+    let backendOk = false;
+    try {
+      const res = await apiClient.get('/health', { timeout: 3000 });
+      backendOk = res.status === 200;
+    } catch {
+      backendOk = false;
+    }
+
+    const status = supabaseConnected ? (backendOk ? 'healthy' : 'degraded') : 'offline';
+
+    return {
+      status,
+      backendUrl: getBaseURL(),
+      supabaseConnected,
+      dbLatencyMs,
+      message: supabaseConnected
+        ? `Database connected (${dbLatencyMs}ms)${backendOk ? ' & API Gateway active' : ' (Direct DB Mode)'}`
+        : 'Database connection failed. Please check Supabase credentials.',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+    };
   },
 };
 

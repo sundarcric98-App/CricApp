@@ -402,3 +402,13 @@ export interface CreateMatchPayload {
   team2PlayingXI?: PlayingXIPlayer[];
   createdBy?: string;
 }
+
+export interface HealthCheckResult {
+  status: 'healthy' | 'degraded' | 'offline';
+  backendUrl: string;
+  supabaseConnected: boolean;
+  dbLatencyMs?: number;
+  message: string;
+  timestamp: string;
+  version: string;
+}
