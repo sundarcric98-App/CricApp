@@ -174,6 +174,66 @@ function computeNRR(
   return nrrVal >= 0 ? `+${nrrVal.toFixed(3)}` : nrrVal.toFixed(3);
 }
 
+export interface StatefulUserRecord {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  mobile?: string;
+  userCode: string;
+  password_hash?: string;
+  pin_hash?: string;
+  profileImage?: string;
+}
+
+// Stateful in-memory user registry for seeded and dynamically registered accounts
+export const statefulUsers: StatefulUserRecord[] = [
+  {
+    id: 'user_sundar_01',
+    name: 'Sundar',
+    username: 'sundar',
+    email: 'sundar@criclivex.com',
+    mobile: '+919876543210',
+    userCode: 'SUND4821',
+    password_hash: '1234',
+    pin_hash: '1234',
+    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
+  },
+  {
+    id: 'user_yuvi_01',
+    name: 'Yuvraj Singh',
+    username: 'yuvi',
+    email: 'yuvi@criclivex.com',
+    mobile: '+919876543211',
+    userCode: 'yuv123',
+    password_hash: '1234',
+    pin_hash: '1234',
+    profileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=256&q=80',
+  },
+  {
+    id: 'user_kohli_01',
+    name: 'Virat Kohli',
+    username: 'virat',
+    email: 'virat@criclivex.com',
+    mobile: '+919876543212',
+    userCode: 'vir180',
+    password_hash: '1234',
+    pin_hash: '1234',
+    profileImage: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=256&q=80',
+  },
+  {
+    id: 'user_rohit_01',
+    name: 'Rohit Sharma',
+    username: 'rohit',
+    email: 'rohit@criclivex.com',
+    mobile: '+919876543213',
+    userCode: 'roh264',
+    password_hash: '1234',
+    pin_hash: '1234',
+    profileImage: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=256&q=80',
+  },
+];
+
 export const cricketApi = {
   // ==========================================
   // AUTHENTICATION & PROFILE APIS
@@ -189,6 +249,7 @@ export const cricketApi = {
     const cleanUsername = payload.username.trim().toLowerCase();
     const cleanEmail = payload.email.trim().toLowerCase();
     const cleanName = payload.name?.trim() || payload.username.trim();
+    const cleanPassword = payload.password.trim();
     const userCode = generatePlayerIdFromUsername(cleanUsername);
 
     try {
@@ -200,7 +261,7 @@ export const cricketApi = {
             username: cleanUsername,
             email: cleanEmail,
             name: cleanName,
-            password_hash: payload.password,
+            password_hash: cleanPassword,
             user_code: userCode,
           },
         ])
@@ -223,6 +284,26 @@ export const cricketApi = {
           profileImage: user.profile_image || undefined,
         };
 
+        // Cache into statefulUsers
+        const existingIdx = statefulUsers.findIndex(
+          (u) => u.id === user.id || u.username === cleanUsername || u.email === cleanEmail
+        );
+        const record: StatefulUserRecord = {
+          id: user.id,
+          name: user.name,
+          username: user.username || cleanUsername,
+          email: user.email || cleanEmail,
+          userCode: user.user_code || userCode,
+          password_hash: cleanPassword,
+          pin_hash: cleanPassword.slice(0, 4),
+          profileImage: user.profile_image || undefined,
+        };
+        if (existingIdx >= 0) {
+          statefulUsers[existingIdx] = record;
+        } else {
+          statefulUsers.push(record);
+        }
+
         return { user: createdUser, userCode: user.user_code || userCode };
       }
 
@@ -236,7 +317,7 @@ export const cricketApi = {
               name: cleanName,
               user_code: userCode,
               mobile: cleanUsername,
-              pin_hash: payload.password.slice(0, 4),
+              pin_hash: cleanPassword.slice(0, 4),
             },
           ])
           .select()
@@ -254,6 +335,18 @@ export const cricketApi = {
             email: cleanEmail,
             userCode: legacyUser.user_code || userCode,
           };
+
+          const record: StatefulUserRecord = {
+            id: legacyUser.id,
+            name: legacyUser.name,
+            username: cleanUsername,
+            email: cleanEmail,
+            userCode: legacyUser.user_code || userCode,
+            password_hash: cleanPassword,
+            pin_hash: cleanPassword.slice(0, 4),
+          };
+          statefulUsers.push(record);
+
           return { user: createdUser, userCode };
         }
       }
@@ -261,14 +354,27 @@ export const cricketApi = {
       console.warn('Supabase signUp error handled:', err?.message || err);
     }
 
+    // Stateful fallback if Supabase is unreachable
+    const fallbackId = `usr_${Date.now()}`;
     const fallbackUser: User = {
-      id: `usr_${Date.now()}`,
+      id: fallbackId,
       name: cleanName,
       username: cleanUsername,
       email: cleanEmail,
       userCode,
       profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
     };
+
+    statefulUsers.push({
+      id: fallbackId,
+      name: cleanName,
+      username: cleanUsername,
+      email: cleanEmail,
+      userCode,
+      password_hash: cleanPassword,
+      pin_hash: cleanPassword.slice(0, 4),
+      profileImage: fallbackUser.profileImage,
+    });
 
     return { user: fallbackUser, userCode };
   },
@@ -278,13 +384,24 @@ export const cricketApi = {
     identifier: string;
     password: string;
   }): Promise<{ user: User; token: string }> {
-    const cleanIdentifier = payload.identifier.trim().toLowerCase();
+    const cleanIdentifier = (payload.identifier || '').trim();
+    const cleanPassword = (payload.password || '').trim();
 
+    if (!cleanIdentifier) {
+      throw new Error('Please enter your Email, Username, or Player ID.');
+    }
+    if (!cleanPassword) {
+      throw new Error('Please enter your password.');
+    }
+
+    const lowerIdentifier = cleanIdentifier.toLowerCase();
+
+    // 1. Search in Supabase DB
     try {
       let { data: user, error } = await supabase
         .from('users')
         .select('*')
-        .or(`email.ilike.${cleanIdentifier},username.ilike.${cleanIdentifier},user_code.ilike.${cleanIdentifier}`)
+        .or(`email.ilike.${lowerIdentifier},username.ilike.${lowerIdentifier},user_code.ilike.${lowerIdentifier}`)
         .maybeSingle();
 
       // If column is missing in schema cache, query user_code or mobile
@@ -292,27 +409,28 @@ export const cricketApi = {
         const { data: legacyUser } = await supabase
           .from('users')
           .select('*')
-          .or(`user_code.ilike.${cleanIdentifier},mobile.ilike.${cleanIdentifier}`)
+          .or(`user_code.ilike.${lowerIdentifier},mobile.ilike.${lowerIdentifier}`)
           .maybeSingle();
         user = legacyUser;
       }
 
       if (user) {
-        if (user.password_hash && user.password_hash !== payload.password) {
-          throw new Error('Incorrect password. Please try again.');
+        const expectedPass = user.password_hash || user.pin_hash;
+        if (expectedPass && expectedPass !== cleanPassword) {
+          throw new Error('Incorrect password. Please check your password and try again.');
         }
 
         const authenticatedUser: User = {
           id: user.id,
-          name: user.name,
-          username: user.username || cleanIdentifier.split('@')[0],
-          email: user.email || (cleanIdentifier.includes('@') ? cleanIdentifier : undefined),
+          name: user.name || cleanIdentifier,
+          username: user.username || (lowerIdentifier.includes('@') ? lowerIdentifier.split('@')[0] : lowerIdentifier),
+          email: user.email || (lowerIdentifier.includes('@') ? lowerIdentifier : undefined),
           mobile: user.mobile,
-          userCode: user.user_code,
+          userCode: user.user_code || generatePlayerIdFromUsername(user.username || user.name || 'player'),
           profileImage: user.profile_image || undefined,
         };
 
-        const token = generateAuthToken(user.id, user.user_code);
+        const token = generateAuthToken(user.id, authenticatedUser.userCode);
         setAuthToken(token);
 
         return {
@@ -322,34 +440,57 @@ export const cricketApi = {
       }
     } catch (err: any) {
       if (err?.message?.includes('Incorrect password')) throw err;
-      console.warn('Supabase signIn error handled:', err);
+      console.warn('Supabase signIn lookup error handled:', err?.message || err);
     }
 
-    // Fallback for testing
-    const fallbackCode = cleanIdentifier.includes('@')
-      ? generatePlayerIdFromUsername(cleanIdentifier.split('@')[0])
-      : cleanIdentifier;
+    // 2. Search in local registered/seeded user cache
+    const localUser = statefulUsers.find(
+      (u) =>
+        u.email.toLowerCase() === lowerIdentifier ||
+        u.username.toLowerCase() === lowerIdentifier ||
+        u.userCode.toLowerCase() === lowerIdentifier ||
+        (u.mobile && u.mobile.toLowerCase() === lowerIdentifier) ||
+        u.name.toLowerCase() === lowerIdentifier ||
+        u.id.toLowerCase() === lowerIdentifier
+    );
 
-    const fallbackToken = generateAuthToken('user_sundar_01', fallbackCode);
-    setAuthToken(fallbackToken);
+    if (localUser) {
+      const expectedPass = localUser.password_hash || localUser.pin_hash;
+      if (expectedPass && expectedPass !== cleanPassword) {
+        throw new Error('Incorrect password. Please check your password and try again.');
+      }
 
-    return {
-      user: {
-        id: 'user_sundar_01',
-        name: cleanIdentifier.split('@')[0],
-        username: cleanIdentifier.split('@')[0],
-        email: cleanIdentifier.includes('@') ? cleanIdentifier : `${cleanIdentifier}@criclivex.com`,
-        userCode: fallbackCode,
-        profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
-      },
-      token: fallbackToken,
-    };
+      const authenticatedUser: User = {
+        id: localUser.id,
+        name: localUser.name,
+        username: localUser.username,
+        email: localUser.email,
+        mobile: localUser.mobile,
+        userCode: localUser.userCode,
+        profileImage: localUser.profileImage,
+      };
+
+      const token = generateAuthToken(localUser.id, localUser.userCode);
+      setAuthToken(token);
+
+      return {
+        user: authenticatedUser,
+        token,
+      };
+    }
+
+    // 3. Reject if user does not exist in DB or cache
+    throw new Error(
+      `No user account found matching "${cleanIdentifier}". Please check your username, email, or Player ID, or click "Sign Up" to register.`
+    );
   },
 
   // 3. Search Player by Player Code (e.g. yuv123) or Username or Name
   async searchPlayerByCode(query: string): Promise<User[]> {
     if (!query || query.trim().length < 2) return [];
     const cleanQuery = query.trim().toLowerCase();
+    const results: User[] = [];
+    const seenIds = new Set<string>();
 
     try {
       const { data, error } = await supabase
@@ -359,14 +500,17 @@ export const cricketApi = {
         .limit(10);
 
       if (!error && data && data.length > 0) {
-        return data.map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          username: u.username || u.name,
-          email: u.email,
-          userCode: u.user_code,
-          profileImage: u.profile_image || undefined,
-        }));
+        for (const u of data) {
+          seenIds.add(u.id);
+          results.push({
+            id: u.id,
+            name: u.name,
+            username: u.username || u.name,
+            email: u.email,
+            userCode: u.user_code,
+            profileImage: u.profile_image || undefined,
+          });
+        }
       }
 
       // If username column query failed, search by user_code and name
@@ -378,21 +522,47 @@ export const cricketApi = {
           .limit(10);
 
         if (legacyData && legacyData.length > 0) {
-          return legacyData.map((u: any) => ({
-            id: u.id,
-            name: u.name,
-            username: u.user_code,
-            email: u.email,
-            userCode: u.user_code,
-            profileImage: u.profile_image || undefined,
-          }));
+          for (const u of legacyData) {
+            if (!seenIds.has(u.id)) {
+              seenIds.add(u.id);
+              results.push({
+                id: u.id,
+                name: u.name,
+                username: u.user_code,
+                email: u.email,
+                userCode: u.user_code,
+                profileImage: u.profile_image || undefined,
+              });
+            }
+          }
         }
       }
     } catch (err) {
       console.warn('searchPlayerByCode error:', err);
     }
 
-    return [];
+    // Include matches from statefulUsers
+    for (const u of statefulUsers) {
+      if (
+        !seenIds.has(u.id) &&
+        (u.userCode.toLowerCase().includes(cleanQuery) ||
+          u.username.toLowerCase().includes(cleanQuery) ||
+          u.name.toLowerCase().includes(cleanQuery) ||
+          (u.email && u.email.toLowerCase().includes(cleanQuery)))
+      ) {
+        seenIds.add(u.id);
+        results.push({
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: u.email,
+          userCode: u.userCode,
+          profileImage: u.profileImage,
+        });
+      }
+    }
+
+    return results;
   },
 
   async sendWhatsAppOtp(
@@ -471,15 +641,18 @@ export const cricketApi = {
     profileImage?: string;
   }): Promise<{ user: User; token: string }> {
     const userCode = generateCustomId(payload.name);
+    const cleanMobile = payload.mobile.trim();
+    const cleanName = payload.name.trim();
+    const cleanPin = payload.pin.trim();
 
     try {
       const { data: user, error } = await supabase
         .from('users')
         .insert([
           {
-            mobile: payload.mobile.trim(),
-            name: payload.name.trim(),
-            pin_hash: payload.pin,
+            mobile: cleanMobile,
+            name: cleanName,
+            pin_hash: cleanPin,
             user_code: userCode,
             profile_image: payload.profileImage || null,
           },
@@ -489,19 +662,35 @@ export const cricketApi = {
 
       if (!error && user) {
         // Initialize player_stats
-        await supabase.from('player_stats').insert([{ user_id: user.id }]).select();
+        try {
+          await supabase.from('player_stats').insert([{ user_id: user.id }]).select();
+        } catch (e) {}
 
         const token = generateAuthToken(user.id, user.user_code);
         setAuthToken(token);
 
+        const createdUser: User = {
+          id: user.id,
+          name: user.name,
+          mobile: user.mobile,
+          userCode: user.user_code,
+          profileImage: user.profile_image || undefined,
+        };
+
+        statefulUsers.push({
+          id: user.id,
+          name: user.name,
+          username: cleanName.toLowerCase().replace(/\s+/g, ''),
+          email: `${cleanName.toLowerCase().replace(/\s+/g, '')}@criclivex.com`,
+          mobile: user.mobile,
+          userCode: user.user_code,
+          pin_hash: cleanPin,
+          password_hash: cleanPin,
+          profileImage: user.profile_image || undefined,
+        });
+
         return {
-          user: {
-            id: user.id,
-            name: user.name,
-            mobile: user.mobile,
-            userCode: user.user_code,
-            profileImage: user.profile_image || undefined,
-          },
+          user: createdUser,
           token,
         };
       }
@@ -509,18 +698,32 @@ export const cricketApi = {
       console.warn('completeSignup DB error:', err);
     }
 
-    const fallbackToken = generateAuthToken(`usr_${Date.now()}`, userCode);
+    const fallbackId = `usr_${Date.now()}`;
+    const fallbackToken = generateAuthToken(fallbackId, userCode);
     setAuthToken(fallbackToken);
 
     const fallbackUser: User = {
-      id: `usr_${Date.now()}`,
-      name: payload.name,
-      mobile: payload.mobile,
+      id: fallbackId,
+      name: cleanName,
+      mobile: cleanMobile,
       userCode,
       profileImage:
         payload.profileImage ||
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
     };
+
+    statefulUsers.push({
+      id: fallbackId,
+      name: cleanName,
+      username: cleanName.toLowerCase().replace(/\s+/g, ''),
+      email: `${cleanName.toLowerCase().replace(/\s+/g, '')}@criclivex.com`,
+      mobile: cleanMobile,
+      userCode,
+      pin_hash: cleanPin,
+      password_hash: cleanPin,
+      profileImage: fallbackUser.profileImage,
+    });
+
     return {
       user: fallbackUser,
       token: fallbackToken,
@@ -528,14 +731,25 @@ export const cricketApi = {
   },
 
   async loginWithPin(mobile: string, pin: string): Promise<{ user: User; token: string }> {
+    const cleanMobile = (mobile || '').trim();
+    const cleanPin = (pin || '').trim();
+
+    if (!cleanMobile) throw new Error('Please enter your registered mobile number.');
+    if (!cleanPin || cleanPin.length !== 4) throw new Error('Please enter your 4-digit PIN.');
+
     try {
       const { data: user, error } = await supabase
         .from('users')
         .select('*')
-        .eq('mobile', mobile.trim())
-        .single();
+        .eq('mobile', cleanMobile)
+        .maybeSingle();
 
       if (!error && user) {
+        const expectedPin = user.pin_hash || user.password_hash;
+        if (expectedPin && expectedPin !== cleanPin) {
+          throw new Error('Incorrect PIN. Please try again.');
+        }
+
         const token = generateAuthToken(user.id, user.user_code);
         setAuthToken(token);
 
@@ -550,25 +764,38 @@ export const cricketApi = {
           token,
         };
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.message?.includes('Incorrect PIN')) throw err;
       console.warn('loginWithPin DB error:', err);
     }
 
-    const fallbackCode = generateCustomId('Player');
-    const fallbackToken = generateAuthToken('user_sundar_01', fallbackCode);
-    setAuthToken(fallbackToken);
+    const cleanDigits = cleanMobile.replace(/\D/g, '');
+    const localUser = statefulUsers.find(
+      (u) => u.mobile && u.mobile.replace(/\D/g, '').endsWith(cleanDigits.slice(-10))
+    );
 
-    return {
-      user: {
-        id: 'user_sundar_01',
-        name: 'Player',
-        mobile,
-        userCode: fallbackCode,
-        profileImage:
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&q=80',
-      },
-      token: fallbackToken,
-    };
+    if (localUser) {
+      const expectedPin = localUser.pin_hash || localUser.password_hash;
+      if (expectedPin && expectedPin !== cleanPin) {
+        throw new Error('Incorrect PIN. Please try again.');
+      }
+
+      const token = generateAuthToken(localUser.id, localUser.userCode);
+      setAuthToken(token);
+
+      return {
+        user: {
+          id: localUser.id,
+          name: localUser.name,
+          mobile: localUser.mobile,
+          userCode: localUser.userCode,
+          profileImage: localUser.profileImage,
+        },
+        token,
+      };
+    }
+
+    throw new Error(`No account found for mobile number ${cleanMobile}. Please sign up first.`);
   },
 
   // ==========================================
