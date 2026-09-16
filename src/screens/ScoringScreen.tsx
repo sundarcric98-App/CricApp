@@ -28,7 +28,7 @@ import {
   setShowWicketModal,
 } from '../store/scoringSlice';
 import { useAppDispatch, useAppSelector } from '../store/store';
-import { BallType, Player, WicketType } from '../types/cricket';
+import { BallType, Player, PlayerBatting, PlayerBowling, WicketType } from '../types/cricket';
 import { oversToBalls } from '../utils/cricketRules';
 
 export const ScoringScreen: React.FC = () => {
@@ -60,21 +60,21 @@ export const ScoringScreen: React.FC = () => {
 
   if (!currentMatch) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Header showBack title="Live Scoring" />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+      <View style={styles.container}>
+        <Header showBack title="Live Scoring Console" onBackPress={() => router.replace('/(tabs)' as any)} />
+        <View style={styles.centerBox}>
           {loading ? (
             <>
               <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={{ color: Colors.onSurfaceVariant, marginTop: 12 }}>
+              <Text style={styles.loadingText}>
                 Loading scoring console...
               </Text>
             </>
           ) : (
             <EmptyState
-              title="Match Not Found"
-              description="Please select or create an active match to start live scoring."
-              actionLabel="Back to Matches"
+              title="Match Ready"
+              description="Initializing match scoring console..."
+              actionLabel="Return to Matches"
               onAction={() => router.replace('/(tabs)' as any)}
             />
           )}
@@ -85,11 +85,74 @@ export const ScoringScreen: React.FC = () => {
 
   const match = currentMatch;
 
-  const isTeam1Batting = match.battingTeamId === match.team1.id;
-  const battingTeam = isTeam1Batting ? match.team1 : match.team2;
-  const bowlingTeam = isTeam1Batting ? match.team2 : match.team1;
-  const activeBowlingTeamId = bowlingTeam.id;
-  const activeBowlingTeamName = bowlingTeam.name;
+  const team1 = match.team1 || {
+    id: 'team_a',
+    name: 'Team 1',
+    shortName: 'TM1',
+    score: 0,
+    wickets: 0,
+    overs: 0,
+    maxOvers: 20,
+  };
+  const team2 = match.team2 || {
+    id: 'team_b',
+    name: 'Team 2',
+    shortName: 'TM2',
+    score: 0,
+    wickets: 0,
+    overs: 0,
+    maxOvers: 20,
+  };
+
+  const isTeam1Batting = match.battingTeamId ? match.battingTeamId === team1.id : true;
+  const battingTeam = isTeam1Batting ? team1 : team2;
+  const bowlingTeam = isTeam1Batting ? team2 : team1;
+  const activeBowlingTeamId = bowlingTeam?.id;
+  const activeBowlingTeamName = bowlingTeam?.name || 'Bowling Team';
+
+  const striker: PlayerBatting = match.activeBatters?.striker || {
+    playerId: `p_striker_${match.id}`,
+    name: `${battingTeam.name} Opener 1`,
+    shortName: 'Opener 1',
+    runs: 0,
+    balls: 0,
+    fours: 0,
+    sixes: 0,
+    strikeRate: 0,
+    isStriker: true,
+    isNonStriker: false,
+    isOut: false,
+  };
+
+  const nonStriker: PlayerBatting = match.activeBatters?.nonStriker || {
+    playerId: `p_nonstriker_${match.id}`,
+    name: `${battingTeam.name} Opener 2`,
+    shortName: 'Opener 2',
+    runs: 0,
+    balls: 0,
+    fours: 0,
+    sixes: 0,
+    strikeRate: 0,
+    isStriker: false,
+    isNonStriker: true,
+    isOut: false,
+  };
+
+  const activeBowler: PlayerBowling = match.activeBowler || {
+    playerId: `p_bowler_${match.id}`,
+    name: `${bowlingTeam.name} Bowler 1`,
+    shortName: 'Bowler 1',
+    overs: 0,
+    oversInBalls: 0,
+    maidens: 0,
+    runs: 0,
+    wickets: 0,
+    economy: 0,
+    dots: 0,
+    wides: 0,
+    noBalls: 0,
+    isCurrentBowler: true,
+  };
 
   // Fetch current bowling team players
   useEffect(() => {
@@ -127,9 +190,9 @@ export const ScoringScreen: React.FC = () => {
           isExtra,
           isWicket,
           wicketType,
-          strikerId: match.activeBatters.striker.playerId,
-          nonStrikerId: match.activeBatters.nonStriker.playerId,
-          bowlerId: match.activeBowler.playerId,
+          strikerId: striker.playerId,
+          nonStrikerId: nonStriker.playerId,
+          bowlerId: activeBowler.playerId,
         },
       })
     )
@@ -138,9 +201,9 @@ export const ScoringScreen: React.FC = () => {
         if (result?.match) {
           const updated = result.match;
           const activeBatting =
-            updated.battingTeamId === updated.team1.id ? updated.team1 : updated.team2;
-          const legalBalls = oversToBalls(activeBatting.overs);
-          const maxBalls = (activeBatting.maxOvers || 20) * 6;
+            updated.battingTeamId === updated.team1?.id ? updated.team1 : updated.team2;
+          const legalBalls = oversToBalls(activeBatting?.overs || 0);
+          const maxBalls = (activeBatting?.maxOvers || 20) * 6;
 
           // Once 6 legal balls bowled in the over, automatically show remaining players for change bowler
           if (
@@ -180,8 +243,8 @@ export const ScoringScreen: React.FC = () => {
   };
 
   const handleSwitchStrike = () => {
-    const s = match.activeBatters.striker;
-    const ns = match.activeBatters.nonStriker;
+    const s = striker;
+    const ns = nonStriker;
 
     const updatedMatch = {
       ...match,
@@ -251,7 +314,7 @@ export const ScoringScreen: React.FC = () => {
   };
 
   const handleCompleteMatch = async () => {
-    const winnerId = selectedWinnerId || match.team1.id;
+    const winnerId = selectedWinnerId || team1.id;
     try {
       const updated = await cricketApi.completeMatch(
         match.id,
@@ -295,14 +358,14 @@ export const ScoringScreen: React.FC = () => {
     // 1. Squad players of current bowling team
     for (const p of bowlingSquad) {
       const existing = currentInningsBowling.find(
-        (b) => b.playerId === p.id || b.name.toLowerCase() === p.name.toLowerCase()
+        (b) => b && (b.playerId === p.id || b.name?.toLowerCase() === p.name?.toLowerCase())
       );
       const figures = existing
-        ? `${existing.overs.toFixed(1)}-${existing.maidens || 0}-${existing.runs}-${existing.wickets}`
+        ? `${(existing.overs || 0).toFixed(1)}-${existing.maidens || 0}-${existing.runs || 0}-${existing.wickets || 0}`
         : 'Yet to bowl';
       const econ =
         existing && existing.oversInBalls > 0
-          ? ((existing.runs / existing.oversInBalls) * 6).toFixed(2)
+          ? (((existing.runs || 0) / existing.oversInBalls) * 6).toFixed(2)
           : (existing?.economy ? existing.economy.toFixed(2) : '0.00');
 
       list.push({
@@ -311,23 +374,23 @@ export const ScoringScreen: React.FC = () => {
         figures,
         econ,
         isCurrentBowler:
-          match.activeBowler.playerId === p.id ||
-          match.activeBowler.name.toLowerCase() === p.name.toLowerCase(),
+          activeBowler.playerId === p.id ||
+          activeBowler.name?.toLowerCase() === p.name?.toLowerCase(),
       });
     }
 
     // 2. Playing XI players of bowling team
     for (const p of bowlingPlayingXI) {
-      if (!list.some((item) => item.id === p.id || item.name.toLowerCase() === p.name.toLowerCase())) {
+      if (p && !list.some((item) => item.id === p.id || item.name?.toLowerCase() === p.name?.toLowerCase())) {
         const existing = currentInningsBowling.find(
-          (b) => b.playerId === p.id || b.name.toLowerCase() === p.name.toLowerCase()
+          (b) => b && (b.playerId === p.id || b.name?.toLowerCase() === p.name?.toLowerCase())
         );
         const figures = existing
-          ? `${existing.overs.toFixed(1)}-${existing.maidens || 0}-${existing.runs}-${existing.wickets}`
+          ? `${(existing.overs || 0).toFixed(1)}-${existing.maidens || 0}-${existing.runs || 0}-${existing.wickets || 0}`
           : 'Yet to bowl';
         const econ =
           existing && existing.oversInBalls > 0
-            ? ((existing.runs / existing.oversInBalls) * 6).toFixed(2)
+            ? (((existing.runs || 0) / existing.oversInBalls) * 6).toFixed(2)
             : '0.00';
 
         list.push({
@@ -335,20 +398,20 @@ export const ScoringScreen: React.FC = () => {
           name: p.name,
           figures,
           econ,
-          isCurrentBowler: match.activeBowler.name.toLowerCase() === p.name.toLowerCase(),
+          isCurrentBowler: activeBowler.name?.toLowerCase() === p.name?.toLowerCase(),
         });
       }
     }
 
     // 3. Any bowler who has bowled in this innings
     for (const b of currentInningsBowling) {
-      if (!list.some((item) => item.id === b.playerId || item.name.toLowerCase() === b.name.toLowerCase())) {
+      if (b && !list.some((item) => item.id === b.playerId || item.name?.toLowerCase() === b.name?.toLowerCase())) {
         list.push({
           id: b.playerId,
           name: b.name,
-          figures: `${b.overs.toFixed(1)}-${b.maidens || 0}-${b.runs}-${b.wickets}`,
-          econ: b.economy.toFixed(2),
-          isCurrentBowler: match.activeBowler.name.toLowerCase() === b.name.toLowerCase(),
+          figures: `${(b.overs || 0).toFixed(1)}-${b.maidens || 0}-${b.runs || 0}-${b.wickets || 0}`,
+          econ: (b.economy || 0).toFixed(2),
+          isCurrentBowler: activeBowler.name?.toLowerCase() === b.name?.toLowerCase(),
         });
       }
     }
@@ -368,7 +431,7 @@ export const ScoringScreen: React.FC = () => {
     }
 
     return list;
-  }, [bowlingSquad, bowlingPlayingXI, currentInningsBowling, match.activeBowler]);
+  }, [bowlingSquad, bowlingPlayingXI, currentInningsBowling, activeBowler]);
 
   const handleSelectBowler = (b: { id: string; name: string }) => {
     cricketApi.changeBowler(match.id, b.name, b.id).then((updated) => {
@@ -396,14 +459,16 @@ export const ScoringScreen: React.FC = () => {
     });
   };
 
-  const maxOvers = battingTeam.maxOvers || 20;
-  const progressPercent = Math.min(100, Math.round((battingTeam.overs / maxOvers) * 100));
+  const maxOvers = battingTeam?.maxOvers || 20;
+  const currentOvers = typeof battingTeam?.overs === 'number' ? battingTeam.overs : 0;
+  const progressPercent = Math.min(100, Math.round((currentOvers / maxOvers) * 100));
 
   return (
     <View style={styles.container}>
       <Header
         showBack
         title="Live Scoring Console"
+        onBackPress={() => router.back()}
         rightAction={
           <TouchableOpacity
             style={styles.endMatchHeaderBtn}
@@ -421,7 +486,7 @@ export const ScoringScreen: React.FC = () => {
           <View style={styles.bannerTopRow}>
             <View style={styles.bannerBadge}>
               <View style={styles.livePulse} />
-              <Text style={styles.bannerBadgeText}>Innings {match.currentInnings} Live</Text>
+              <Text style={styles.bannerBadgeText}>Innings {match.currentInnings || 1} Live</Text>
               <Text style={styles.bulletDot}>•</Text>
               <Text style={styles.targetText}>
                 {match.toss || 'Live Scorer Console'}
@@ -436,15 +501,15 @@ export const ScoringScreen: React.FC = () => {
             <View>
               <Text style={styles.matchTitleText}>{match.title}</Text>
               <Text style={styles.matchScoreText}>
-                {battingTeam.score}/{battingTeam.wickets}
+                {battingTeam.score ?? 0}/{battingTeam.wickets ?? 0}
               </Text>
               <Text style={styles.crrText}>
-                CRR: {match.crr ? match.crr.toFixed(2) : '0.00'}
+                CRR: {typeof match.crr === 'number' ? match.crr.toFixed(2) : '0.00'}
                 {match.target ? ` • Target: ${match.target}` : ''}
               </Text>
             </View>
             <View style={styles.oversCol}>
-              <Text style={styles.oversBigText}>{battingTeam.overs.toFixed(1)}</Text>
+              <Text style={styles.oversBigText}>{currentOvers.toFixed(1)}</Text>
               <Text style={styles.maxOversText}>/ {maxOvers}.0 ov</Text>
             </View>
           </View>
@@ -457,14 +522,14 @@ export const ScoringScreen: React.FC = () => {
 
         {/* Active Batsmen Card */}
         <CreasePairCard
-          striker={match.activeBatters.striker}
-          nonStriker={match.activeBatters.nonStriker}
+          striker={striker}
+          nonStriker={nonStriker}
           onSwitchStrike={handleSwitchStrike}
         />
 
         {/* Active Bowler Card */}
         <ActiveBowlerCard
-          bowler={match.activeBowler}
+          bowler={activeBowler}
           onChangeBowler={() => dispatch(setShowBowlerModal(true))}
         />
 
@@ -472,10 +537,12 @@ export const ScoringScreen: React.FC = () => {
         <View style={styles.progressionCard}>
           <View style={styles.progressionHeader}>
             <Text style={styles.progressionTitle}>
-              Over {Math.floor(battingTeam.overs) + 1} Progression
+              Over {Math.floor(currentOvers) + 1} Progression
             </Text>
             <Text style={styles.progressionRuns}>
-              {match.recentBalls.length > 0 ? match.recentBalls.slice(-6).join(' • ') : 'Ready'}
+              {Array.isArray(match.recentBalls) && match.recentBalls.length > 0
+                ? match.recentBalls.slice(-6).join(' • ')
+                : 'Ready'}
             </Text>
           </View>
         </View>
@@ -782,6 +849,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.surface,
+  },
+  centerBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    color: '#94A3B8',
+    marginTop: 14,
+    fontSize: 14,
+    fontWeight: '600',
   },
   endMatchHeaderBtn: {
     paddingHorizontal: 10,

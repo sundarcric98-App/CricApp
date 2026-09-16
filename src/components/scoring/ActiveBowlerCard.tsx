@@ -13,6 +13,13 @@ export const ActiveBowlerCard: React.FC<ActiveBowlerCardProps> = ({
   bowler,
   onChangeBowler,
 }) => {
+  const bowlerName = bowler?.name || 'Opening Bowler';
+  const oversText = typeof bowler?.overs === 'number' ? bowler.overs.toFixed(1) : '0.0';
+  const maidens = bowler?.maidens ?? 0;
+  const runs = bowler?.runs ?? 0;
+  const wickets = bowler?.wickets ?? 0;
+  const econText = typeof bowler?.economy === 'number' ? bowler.economy.toFixed(2) : '0.00';
+
   return (
     <View style={styles.container}>
       <View style={styles.mainRow}>
@@ -23,7 +30,7 @@ export const ActiveBowlerCard: React.FC<ActiveBowlerCardProps> = ({
           <View style={styles.infoCol}>
             <View style={styles.nameBadgeRow}>
               <Text style={styles.bowlerName} numberOfLines={1}>
-                {bowler.name}
+                {bowlerName}
               </Text>
               <View style={styles.bowlerTypeBadge}>
                 <Text style={styles.bowlerTypeText}>Pace</Text>
@@ -32,10 +39,10 @@ export const ActiveBowlerCard: React.FC<ActiveBowlerCardProps> = ({
             <View style={styles.figuresRow}>
               <Text style={styles.figuresLabel}>Figures:</Text>
               <Text style={styles.figuresValue}>
-                {bowler.overs.toFixed(1)} - {bowler.maidens} - {bowler.runs} - {bowler.wickets}
+                {oversText} - {maidens} - {runs} - {wickets}
               </Text>
               <Text style={styles.dotSeparator}>•</Text>
-              <Text style={styles.econValue}>Econ: {bowler.economy.toFixed(2)}</Text>
+              <Text style={styles.econValue}>Econ: {econText}</Text>
             </View>
           </View>
         </View>

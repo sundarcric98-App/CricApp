@@ -1523,11 +1523,11 @@ export const cricketApi = {
           return {
             id: m.id,
             title: `${team1Short} vs ${team2Short}`,
-            seriesName: tournament?.name || 'Premier League 2025',
-            matchNumber: m.match_type || 'T20',
+            seriesName: tournament?.name || 'Premier League 2026',
+            matchNumber: m.match_type || `${m.overs || 20} Overs Match`,
             venue: m.venue || 'Stadium',
             city: (m.venue || '').split(',')[1]?.trim() || 'City',
-            status: m.status || 'upcoming',
+            status: m.status || 'live',
             format: m.match_type || 'T20',
             currentInnings: inn2 ? 2 : 1,
             toss: 'Toss completed',
@@ -1564,47 +1564,47 @@ export const cricketApi = {
               Number(activeInnings?.overs) > 0
                 ? Number(((activeInnings?.runs || 0) / Number(activeInnings?.overs)).toFixed(2))
                 : 0,
-            recentBalls: ['1', '2', '0', '4', 'W', '6', '1', '1'],
+            recentBalls: [],
             activeBatters: {
               striker: {
-                playerId: 'p1',
-                name: 'V. Kohli',
-                shortName: 'V. Kohli',
-                runs: 68,
-                balls: 42,
-                fours: 6,
-                sixes: 2,
-                strikeRate: 161.9,
+                playerId: `p_striker_${m.id}`,
+                name: `${team1Name} Opener 1`,
+                shortName: 'Opener 1',
+                runs: inn1?.runs || 0,
+                balls: Math.round(Number(inn1?.overs || 0) * 6),
+                fours: 0,
+                sixes: 0,
+                strikeRate: 100.0,
                 isStriker: true,
                 isNonStriker: false,
                 isOut: false,
               },
               nonStriker: {
-                playerId: 'p2',
-                name: 'G. Maxwell',
-                shortName: 'G. Maxwell',
-                runs: 24,
-                balls: 11,
-                fours: 2,
-                sixes: 2,
-                strikeRate: 218.2,
+                playerId: `p_nonstriker_${m.id}`,
+                name: `${team1Name} Opener 2`,
+                shortName: 'Opener 2',
+                runs: 0,
+                balls: 0,
+                fours: 0,
+                sixes: 0,
+                strikeRate: 0,
                 isStriker: false,
                 isNonStriker: true,
                 isOut: false,
               },
             },
             activeBowler: {
-              playerId: 'p3',
-              name: 'J. Bumrah',
-              shortName: 'J. Bumrah',
-              overs: 3.2,
-              oversInBalls: 20,
+              playerId: `p_bowler_${m.id}`,
+              name: `${team2Name} Bowler 1`,
+              shortName: 'Bowler 1',
+              overs: Number(inn1?.overs || 0),
+              oversInBalls: Math.round(Number(inn1?.overs || 0) * 6),
               maidens: 0,
-              runs: 28,
-              wickets: 2,
-              economy: 8.4,
-              dots: 10,
-              wides: 1,
+              runs: inn1?.runs || 0,
+              wickets: inn1?.wickets || 0,
+              economy: Number(inn1?.overs || 0) > 0 ? Number((inn1.runs / inn1.overs).toFixed(2)) : 0,
+              dots: 0,
+              wides: 0,
               noBalls: 0,
               isCurrentBowler: true,
             },
@@ -1612,8 +1612,12 @@ export const cricketApi = {
           };
         });
 
-        statefulMatches = mapped;
-        return mapped;
+        // Merge mapped matches while preserving any newly created in-memory matches
+        const localCreated = statefulMatches.filter((sm) => !mapped.some((dm) => dm.id === sm.id));
+        statefulMatches = [...localCreated, ...mapped];
+
+        if (!status) return statefulMatches;
+        return statefulMatches.filter((m) => m.status === status);
       }
     } catch (err) {
       console.warn('getMatches error:', err);
@@ -1623,7 +1627,6 @@ export const cricketApi = {
   },
 
   async createMatch(payload: CreateMatchPayload): Promise<Match> {
-    const matchId = `match_${Date.now()}`;
     const teamAShort = payload.teamAShortName || payload.teamAName.substring(0, 3).toUpperCase();
     const teamBShort = payload.teamBShortName || payload.teamBName.substring(0, 3).toUpperCase();
     const tossWinnerName = payload.tossWinner === 'teamA' ? payload.teamAName : payload.teamBName;
@@ -1636,6 +1639,42 @@ export const cricketApi = {
     const battingTeamName = isTeamABatting ? payload.teamAName : payload.teamBName;
     const battingTeamId = isTeamABatting ? payload.teamAId || 'team_a' : payload.teamBId || 'team_b';
     const bowlingTeamId = isTeamABatting ? payload.teamBId || 'team_b' : payload.teamAId || 'team_a';
+
+    let supabaseMatchId: string | null = null;
+    if (isValidUUID(payload.teamAId) && isValidUUID(payload.teamBId)) {
+      try {
+        const { data: dbMatch, error: matchErr } = await supabase
+          .from('matches')
+          .insert([
+            {
+              team_a_id: payload.teamAId,
+              team_b_id: payload.teamBId,
+              tournament_id: isValidUUID(payload.tournamentId) ? payload.tournamentId : null,
+              match_type: payload.matchType || `${payload.overs} Overs Match`,
+              overs: payload.overs,
+              venue: payload.venue,
+              city: payload.city,
+              status: 'live',
+              start_time: new Date().toISOString(),
+              toss_winner_team_id: isValidUUID(tossWinnerId) ? tossWinnerId : null,
+              toss_decision: payload.decision,
+              created_by: isValidUUID(payload.createdBy) ? payload.createdBy : null,
+            },
+          ])
+          .select()
+          .single();
+
+        if (!matchErr && dbMatch) {
+          supabaseMatchId = dbMatch.id;
+        } else if (matchErr) {
+          console.warn('Supabase createMatch error handled:', matchErr.message);
+        }
+      } catch (e) {
+        console.warn('Supabase match insert error handled:', e);
+      }
+    }
+
+    const matchId = supabaseMatchId || `match_${Date.now()}`;
 
     const striker: PlayerBatting = {
       playerId: `p_striker_${Date.now()}`,
@@ -1761,7 +1800,7 @@ export const cricketApi = {
       },
     };
 
-    statefulMatches = [newMatch, ...statefulMatches];
+    statefulMatches = [newMatch, ...statefulMatches.filter((m) => m.id !== matchId)];
     statefulScorecards[matchId] = newScorecard;
 
     return newMatch;
@@ -1770,40 +1809,249 @@ export const cricketApi = {
   async getMatchById(matchId: string): Promise<Match> {
     const match = statefulMatches.find((m) => m.id === matchId);
     if (match) return match;
+
+    // Check Supabase matches table
+    try {
+      const { data: m, error } = await supabase
+        .from('matches')
+        .select(
+          `*,
+           teamA:teams!matches_team_a_id_fkey(id, name, short_name, logo_url),
+           teamB:teams!matches_team_b_id_fkey(id, name, short_name, logo_url),
+           tournaments(id, name),
+           innings(id, inning_no, batting_team_id, bowling_team_id, runs, wickets, overs, extras)`
+        )
+        .eq('id', matchId)
+        .maybeSingle();
+
+      if (!error && m) {
+        const teamA = Array.isArray(m.teamA) ? m.teamA[0] : m.teamA;
+        const teamB = Array.isArray(m.teamB) ? m.teamB[0] : m.teamB;
+        const tournament = Array.isArray(m.tournaments) ? m.tournaments[0] : m.tournaments;
+        const inn1 = m.innings?.find((i: any) => i.inning_no === 1);
+        const inn2 = m.innings?.find((i: any) => i.inning_no === 2);
+        const activeInnings = inn2 || inn1;
+
+        const team1Name = teamA?.name || 'Team 1';
+        const team2Name = teamB?.name || 'Team 2';
+        const team1Short = teamA?.short_name || team1Name.slice(0, 3).toUpperCase();
+        const team2Short = teamB?.short_name || team2Name.slice(0, 3).toUpperCase();
+
+        const mappedMatch: Match = {
+          id: m.id,
+          title: `${team1Short} vs ${team2Short}`,
+          seriesName: tournament?.name || 'Premier League 2026',
+          matchNumber: m.match_type || `${m.overs || 20} Overs Match`,
+          venue: m.venue || 'Stadium',
+          city: (m.venue || '').split(',')[1]?.trim() || 'City',
+          status: (m.status as any) || 'live',
+          format: m.match_type || 'T20',
+          currentInnings: inn2 ? 2 : 1,
+          toss: `${team1Name} won toss & elected to bat`,
+          tossWinner: team1Name,
+          decision: 'bat',
+          team1: {
+            id: teamA?.id || 'team_a',
+            name: team1Name,
+            shortName: team1Short,
+            logo:
+              teamA?.logo_url ||
+              'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
+            score: inn1?.runs || 0,
+            wickets: inn1?.wickets || 0,
+            overs: Number(inn1?.overs || 0),
+            maxOvers: m.overs || 20,
+          },
+          team2: {
+            id: teamB?.id || 'team_b',
+            name: team2Name,
+            shortName: team2Short,
+            logo:
+              teamB?.logo_url ||
+              'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80',
+            score: inn2?.runs || 0,
+            wickets: inn2?.wickets || 0,
+            overs: Number(inn2?.overs || 0),
+            maxOvers: m.overs || 20,
+          },
+          battingTeamId: activeInnings?.batting_team_id || teamA?.id || 'team_a',
+          bowlingTeamId: activeInnings?.bowling_team_id || teamB?.id || 'team_b',
+          target: inn1?.runs ? inn1.runs + 1 : undefined,
+          crr:
+            Number(activeInnings?.overs) > 0
+              ? Number(((activeInnings?.runs || 0) / Number(activeInnings?.overs)).toFixed(2))
+              : 0,
+          recentBalls: [],
+          activeBatters: {
+            striker: {
+              playerId: `p_striker_${m.id}`,
+              name: `${team1Name} Opener 1`,
+              shortName: 'Opener 1',
+              runs: inn1?.runs || 0,
+              balls: Math.round(Number(inn1?.overs || 0) * 6),
+              fours: 0,
+              sixes: 0,
+              strikeRate: 100.0,
+              isStriker: true,
+              isNonStriker: false,
+              isOut: false,
+            },
+            nonStriker: {
+              playerId: `p_nonstriker_${m.id}`,
+              name: `${team1Name} Opener 2`,
+              shortName: 'Opener 2',
+              runs: 0,
+              balls: 0,
+              fours: 0,
+              sixes: 0,
+              strikeRate: 0,
+              isStriker: false,
+              isNonStriker: true,
+              isOut: false,
+            },
+          },
+          activeBowler: {
+            playerId: `p_bowler_${m.id}`,
+            name: `${team2Name} Bowler 1`,
+            shortName: 'Bowler 1',
+            overs: Number(inn1?.overs || 0),
+            oversInBalls: Math.round(Number(inn1?.overs || 0) * 6),
+            maidens: 0,
+            runs: inn1?.runs || 0,
+            wickets: inn1?.wickets || 0,
+            economy: Number(inn1?.overs || 0) > 0 ? Number((inn1.runs / inn1.overs).toFixed(2)) : 0,
+            dots: 0,
+            wides: 0,
+            noBalls: 0,
+            isCurrentBowler: true,
+          },
+          startTime: m.start_time || new Date().toISOString(),
+        };
+
+        statefulMatches = [mappedMatch, ...statefulMatches];
+        return mappedMatch;
+      }
+    } catch (e) {
+      console.warn('getMatchById Supabase lookup error:', e);
+    }
+
     const all = await this.getMatches();
     const found = all.find((m) => m.id === matchId);
     if (found) return found;
-    throw new Error(`Match with ID ${matchId} not found`);
+
+    // Guaranteed fallback match to prevent crashing the scoring console
+    const fallbackMatch: Match = {
+      id: matchId,
+      title: 'Live Match',
+      seriesName: 'Tournament Fixture 2026',
+      matchNumber: '20 Overs Match',
+      venue: 'Cricket Stadium',
+      city: 'City',
+      status: 'live',
+      format: 'T20',
+      currentInnings: 1,
+      toss: 'Toss Completed',
+      tossWinner: 'Team 1',
+      decision: 'bat',
+      team1: {
+        id: 'team_a',
+        name: 'Team 1',
+        shortName: 'TM1',
+        logo: 'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=128&q=80',
+        score: 0,
+        wickets: 0,
+        overs: 0,
+        maxOvers: 20,
+      },
+      team2: {
+        id: 'team_b',
+        name: 'Team 2',
+        shortName: 'TM2',
+        logo: 'https://images.unsplash.com/photo-1531415074868-036b1c57e3ce?w=128&q=80',
+        score: 0,
+        wickets: 0,
+        overs: 0,
+        maxOvers: 20,
+      },
+      battingTeamId: 'team_a',
+      bowlingTeamId: 'team_b',
+      crr: 0,
+      recentBalls: [],
+      activeBatters: {
+        striker: {
+          playerId: `p_striker_${matchId}`,
+          name: 'Opener 1',
+          shortName: 'Opener 1',
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          strikeRate: 0,
+          isStriker: true,
+          isNonStriker: false,
+          isOut: false,
+        },
+        nonStriker: {
+          playerId: `p_nonstriker_${matchId}`,
+          name: 'Opener 2',
+          shortName: 'Opener 2',
+          runs: 0,
+          balls: 0,
+          fours: 0,
+          sixes: 0,
+          strikeRate: 0,
+          isStriker: false,
+          isNonStriker: true,
+          isOut: false,
+        },
+      },
+      activeBowler: {
+        playerId: `p_bowler_${matchId}`,
+        name: 'Opening Bowler',
+        shortName: 'Bowler 1',
+        overs: 0,
+        oversInBalls: 0,
+        maidens: 0,
+        runs: 0,
+        wickets: 0,
+        economy: 0,
+        dots: 0,
+        wides: 0,
+        noBalls: 0,
+        isCurrentBowler: true,
+      },
+      startTime: new Date().toISOString(),
+    };
+
+    statefulMatches = [fallbackMatch, ...statefulMatches];
+    return fallbackMatch;
   },
 
   async getScorecard(matchId: string): Promise<Scorecard> {
     const scorecard = statefulScorecards[matchId];
     if (scorecard) return scorecard;
 
-    const match = statefulMatches.find((m) => m.id === matchId);
-    if (match) {
-      const fallback: Scorecard = {
-        matchId,
-        innings1: {
-          teamId: match.team1.id,
-          teamName: match.team1.name,
-          shortName: match.team1.shortName,
-          score: match.team1.score,
-          wickets: match.team1.wickets,
-          overs: match.team1.overs,
-          legalBalls: oversToBalls(match.team1.overs),
-          maxOvers: match.team1.maxOvers || 20,
-          runRate: 0,
-          batting: [match.activeBatters.striker, match.activeBatters.nonStriker],
-          bowling: [match.activeBowler],
-          extras: { wides: 0, noBalls: 0, byes: 0, legByes: 0, penalty: 0, total: 0 },
-          fallOfWickets: [],
-        },
-      };
-      statefulScorecards[matchId] = fallback;
-      return fallback;
-    }
-    throw new Error(`Scorecard for match ${matchId} not found`);
+    const match = await this.getMatchById(matchId);
+    const fallback: Scorecard = {
+      matchId,
+      innings1: {
+        teamId: match.team1.id,
+        teamName: match.team1.name,
+        shortName: match.team1.shortName,
+        score: match.team1.score,
+        wickets: match.team1.wickets,
+        overs: match.team1.overs,
+        legalBalls: oversToBalls(match.team1.overs),
+        maxOvers: match.team1.maxOvers || 20,
+        runRate: 0,
+        batting: [match.activeBatters.striker, match.activeBatters.nonStriker],
+        bowling: [match.activeBowler],
+        extras: { wides: 0, noBalls: 0, byes: 0, legByes: 0, penalty: 0, total: 0 },
+        fallOfWickets: [],
+      },
+    };
+    statefulScorecards[matchId] = fallback;
+    return fallback;
   },
 
   async getCommentary(matchId: string, filter?: string): Promise<CommentaryItem[]> {

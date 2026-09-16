@@ -17,6 +17,18 @@ export const CreasePairCard: React.FC<CreasePairCardProps> = ({
   onSwitchStrike,
   onSelectBatter,
 }) => {
+  const strikerName = striker?.name || 'Striker';
+  const strikerRuns = striker?.runs ?? 0;
+  const strikerBalls = striker?.balls ?? 0;
+  const strikerFours = striker?.fours ?? 0;
+  const strikerSixes = striker?.sixes ?? 0;
+
+  const nonStrikerName = nonStriker?.name || 'Non-Striker';
+  const nonStrikerRuns = nonStriker?.runs ?? 0;
+  const nonStrikerBalls = nonStriker?.balls ?? 0;
+  const nonStrikerFours = nonStriker?.fours ?? 0;
+  const nonStrikerSixes = nonStriker?.sixes ?? 0;
+
   return (
     <View style={styles.container}>
       {/* Top Header Row with Switch Strike Button */}
@@ -48,13 +60,13 @@ export const CreasePairCard: React.FC<CreasePairCardProps> = ({
             <Text style={styles.strikeBadgeText}>STRIKE</Text>
           </View>
           <Text style={styles.strikerName} numberOfLines={1}>
-            {striker.name}
+            {strikerName}
           </Text>
         </View>
         <View style={styles.statsGroup}>
-          <Text style={styles.strikerRuns}>{striker.runs}</Text>
+          <Text style={styles.strikerRuns}>{strikerRuns}</Text>
           <Text style={styles.ballsMeta}>
-            ({striker.balls}b • {striker.fours}x4 • {striker.sixes}x6)
+            ({strikerBalls}b • {strikerFours}x4 • {strikerSixes}x6)
           </Text>
         </View>
       </TouchableOpacity>
@@ -67,13 +79,13 @@ export const CreasePairCard: React.FC<CreasePairCardProps> = ({
       >
         <View style={styles.batterLeft}>
           <Text style={styles.nonStrikerName} numberOfLines={1}>
-            {nonStriker.name}
+            {nonStrikerName}
           </Text>
         </View>
         <View style={styles.statsGroup}>
-          <Text style={styles.nonStrikerRuns}>{nonStriker.runs}</Text>
+          <Text style={styles.nonStrikerRuns}>{nonStrikerRuns}</Text>
           <Text style={styles.ballsMeta}>
-            ({nonStriker.balls}b • {nonStriker.fours}x4 • {nonStriker.sixes}x6)
+            ({nonStrikerBalls}b • {nonStrikerFours}x4 • {nonStrikerSixes}x6)
           </Text>
         </View>
       </TouchableOpacity>
