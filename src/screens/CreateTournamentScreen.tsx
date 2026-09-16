@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/colors';
 import cricketApi from '../services/api';
 import { RootState, useAppSelector } from '../store/store';
+import { formatDateForPostgres } from '../utils/dateUtils';
 import { generateCustomId } from '../utils/idGenerator';
 
 const BANNER_PRESETS = [
@@ -40,12 +41,13 @@ export const CreateTournamentScreen: React.FC = () => {
   const [city, setCity] = useState('');
   const [season, setSeason] = useState('2026');
   const [overs, setOvers] = useState<number>(20);
+  const [customOvers, setCustomOvers] = useState<string>('');
   const [maxTeams, setMaxTeams] = useState<number>(8);
   const [winPoints, setWinPoints] = useState<number>(2);
   const [tiePoints, setTiePoints] = useState<number>(1);
   const [lossPoints, setLossPoints] = useState<number>(0);
-  const [startDate, setStartDate] = useState('05-09-2026');
-  const [endDate, setEndDate] = useState('15-09-2026');
+  const [startDate, setStartDate] = useState('18-09-2026');
+  const [endDate, setEndDate] = useState('28-09-2026');
   const [ballType, setBallType] = useState<'Leather Ball' | 'Tennis Ball' | 'Tape Ball'>('Leather Ball');
   const [selectedBanner, setSelectedBanner] = useState(BANNER_PRESETS[0]);
   const [loading, setLoading] = useState(false);
@@ -70,6 +72,13 @@ export const CreateTournamentScreen: React.FC = () => {
       return;
     }
 
+    const effectiveOvers = (customOvers && parseInt(customOvers, 10) > 0)
+      ? parseInt(customOvers, 10)
+      : overs;
+
+    const formattedStart = formatDateForPostgres(startDate) || '2026-09-18';
+    const formattedEnd = formatDateForPostgres(endDate) || '2026-09-28';
+
     setLoading(true);
     try {
       const newTournament = await cricketApi.createTournament({
@@ -77,14 +86,14 @@ export const CreateTournamentScreen: React.FC = () => {
         clubName: clubName.trim(),
         city: city.trim(),
         season: season.trim(),
-        overs,
-        matchType: `${overs} Overs (${overs >= 50 ? 'ODI' : 'T20'})`,
+        overs: effectiveOvers,
+        matchType: `${effectiveOvers} Overs (${effectiveOvers >= 50 ? 'ODI' : 'T20'})`,
         maxTeams,
         winPoints,
         tiePoints,
         lossPoints,
-        startDate,
-        endDate,
+        startDate: formattedStart,
+        endDate: formattedEnd,
         ballType,
         bannerUrl: selectedBanner,
         createdBy: currentUser?.id,
@@ -213,23 +222,48 @@ export const CreateTournamentScreen: React.FC = () => {
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Format & Overs Per Match *</Text>
             <View style={styles.oversGrid}>
-              {OVERS_OPTIONS.map((num) => (
-                <TouchableOpacity
-                  key={num}
-                  style={[styles.overButton, overs === num && styles.overButtonActive]}
-                  onPress={() => setOvers(num)}
-                  activeOpacity={0.8}
-                >
-                  <Text
-                    style={[
-                      styles.overButtonText,
-                      overs === num && styles.overButtonTextActive,
-                    ]}
+              {OVERS_OPTIONS.map((num) => {
+                const isSelected = !customOvers && overs === num;
+                return (
+                  <TouchableOpacity
+                    key={num}
+                    style={[styles.overButton, isSelected && styles.overButtonActive]}
+                    onPress={() => {
+                      setOvers(num);
+                      setCustomOvers('');
+                    }}
+                    activeOpacity={0.8}
                   >
-                    {num} Ov {num === 20 ? '(T20)' : num === 50 ? '(ODI)' : ''}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.overButtonText,
+                        isSelected && styles.overButtonTextActive,
+                      ]}
+                    >
+                      {num} Ov {num === 20 ? '(T20)' : num === 50 ? '(ODI)' : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Custom Overs Input (e.g. 7 overs, 8 overs, etc.) */}
+            <View style={styles.customOversContainer}>
+              <Text style={styles.customOversLabel}>Or Type Custom Overs:</Text>
+              <TextInput
+                style={styles.customOversInput}
+                placeholder="e.g. 7, 8, 12 overs"
+                placeholderTextColor={Colors.onSurfaceVariant}
+                keyboardType="numeric"
+                value={customOvers}
+                onChangeText={(val) => {
+                  setCustomOvers(val);
+                  const parsed = parseInt(val, 10);
+                  if (!isNaN(parsed) && parsed > 0) {
+                    setOvers(parsed);
+                  }
+                }}
+              />
             </View>
           </View>
 
@@ -254,25 +288,6 @@ export const CreateTournamentScreen: React.FC = () => {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
-          </View>
-
-          {/* Points System Rule */}
-          <View style={styles.fieldGroup}>
-            <Text style={styles.fieldLabel}>Points System (Auto NRR Enabled) *</Text>
-            <View style={styles.pointsRuleCard}>
-              <View style={styles.pointChip}>
-                <Text style={styles.pointChipLabel}>Win</Text>
-                <Text style={styles.pointChipValue}>+{winPoints} Pts</Text>
-              </View>
-              <View style={styles.pointChip}>
-                <Text style={styles.pointChipLabel}>Tie / NR</Text>
-                <Text style={styles.pointChipValue}>+{tiePoints} Pt</Text>
-              </View>
-              <View style={styles.pointChip}>
-                <Text style={styles.pointChipLabel}>Loss</Text>
-                <Text style={styles.pointChipValue}>{lossPoints} Pts</Text>
-              </View>
             </View>
           </View>
 
@@ -489,22 +504,30 @@ const styles = StyleSheet.create({
   overButtonTextActive: {
     color: Colors.onPrimary,
   },
-  pointsRuleCard: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: 'rgba(0, 105, 92, 0.12)',
-    padding: 10,
+  customOversContainer: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderRadius: 10,
+    padding: 10,
     borderWidth: 1,
-    borderColor: 'rgba(78, 222, 163, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  pointChip: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
+  customOversLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  customOversInput: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: Colors.onSurface,
+    fontSize: 14,
+    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   pointChipLabel: {
     fontSize: 10,

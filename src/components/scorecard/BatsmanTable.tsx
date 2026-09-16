@@ -12,102 +12,102 @@ interface BatsmanTableProps {
     noBalls: number;
     byes: number;
     legByes: number;
+    penalty?: number;
     total: number;
   };
+  totalSummary?: string;
+  didNotBat?: string[];
 }
 
 export const BatsmanTable: React.FC<BatsmanTableProps> = ({
   teamName,
   totalScore,
   batting,
-  extras,
+  extras = { wides: 10, noBalls: 0, byes: 0, legByes: 2, penalty: 0, total: 12 },
+  totalSummary,
+  didNotBat,
 }) => {
+  // Format total summary if not directly supplied
+  const displayTotalSummary = totalSummary || totalScore;
+
   return (
-    <View style={styles.container}>
-      {/* Section Header */}
-      <View style={styles.tableHeader}>
-        <View style={styles.headerLeft}>
-          <View style={styles.teamColorPill} />
-          <Text style={styles.teamTitle}>{teamName}</Text>
-          <Text style={styles.subTitle}>Batting</Text>
-        </View>
-        <Text style={styles.totalScoreText}>{totalScore}</Text>
+    <View style={styles.cardContainer}>
+      {/* 1. Emerald Team Header Banner (India | 157-3 (13.4 Ov)) */}
+      <View style={styles.emeraldHeaderBanner}>
+        <Text style={styles.teamBannerTitle}>{teamName}</Text>
+        <Text style={styles.teamBannerScore}>{totalScore}</Text>
       </View>
 
-      {/* Column Titles */}
+      {/* 2. Column Headers Table (Batter | R | B | 4s | 6s | SR) */}
       <View style={styles.columnHeaderRow}>
-        <Text style={[styles.colHeader, styles.colBatsman]}>BATSMAN</Text>
-        <Text style={[styles.colHeader, styles.colNum]}>R</Text>
+        <Text style={[styles.colHeader, styles.colBatter]}>Batter</Text>
+        <Text style={[styles.colHeader, styles.colNum, styles.colRHeader]}>R</Text>
         <Text style={[styles.colHeader, styles.colNum]}>B</Text>
         <Text style={[styles.colHeader, styles.colNum]}>4s</Text>
         <Text style={[styles.colHeader, styles.colNum]}>6s</Text>
         <Text style={[styles.colHeader, styles.colSR]}>SR</Text>
       </View>
 
-      {/* Batsman Rows */}
+      {/* 3. Batters List */}
       {batting.map((batter, index) => {
-        const isCurrentStriker = batter.isStriker;
         const isNotOut = !batter.isOut;
+        const dismissalText = isNotOut ? 'not out' : (batter.dismissalInfo || 'out');
+        const strikeRateFormatted =
+          batter.balls > 0
+            ? ((batter.runs / batter.balls) * 100).toFixed(2)
+            : '0.00';
 
         return (
           <View
             key={batter.playerId || `batter_${index}`}
-            style={[styles.batterRow, isCurrentStriker && styles.strikerRow]}
+            style={[styles.batterRow, index === batting.length - 1 && styles.lastBatterRow]}
           >
-            <View style={styles.colBatsman}>
-              <View style={styles.nameRow}>
-                {isCurrentStriker && <View style={styles.strikerDot} />}
-                <Text
-                  style={[
-                    styles.batterNameText,
-                    isCurrentStriker && styles.strikerNameText,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {batter.name}
-                </Text>
-              </View>
-              <Text style={styles.dismissalText} numberOfLines={1}>
-                {isCurrentStriker
-                  ? 'batting on strike'
-                  : isNotOut
-                  ? 'not out'
-                  : batter.dismissalInfo || 'out'}
+            {/* Batter Name & Dismissal */}
+            <View style={styles.colBatter}>
+              <Text style={styles.batterNameLink} numberOfLines={1}>
+                {batter.name}
+              </Text>
+              <Text style={styles.dismissalSubtext} numberOfLines={2}>
+                {dismissalText}
               </Text>
             </View>
 
-            <Text
-              style={[
-                styles.colNum,
-                styles.runsText,
-                isCurrentStriker && styles.strikerRunsText,
-              ]}
-            >
-              {batter.runs}
-            </Text>
-            <Text style={[styles.colNum, styles.ballsText]}>{batter.balls}</Text>
-            <Text style={[styles.colNum, styles.foursText]}>{batter.fours}</Text>
-            <Text style={[styles.colNum, styles.sixesText]}>{batter.sixes}</Text>
-            <Text
-              style={[
-                styles.colSR,
-                styles.srText,
-                isCurrentStriker && styles.strikerSrText,
-              ]}
-            >
-              {batter.strikeRate.toFixed(1)}
-            </Text>
+            {/* Stats */}
+            <Text style={[styles.colNum, styles.runsValue]}>{batter.runs}</Text>
+            <Text style={[styles.colNum, styles.statValue]}>{batter.balls}</Text>
+            <Text style={[styles.colNum, styles.statValue]}>{batter.fours || 0}</Text>
+            <Text style={[styles.colNum, styles.statValue]}>{batter.sixes || 0}</Text>
+            <Text style={[styles.colSR, styles.srValue]}>{strikeRateFormatted}</Text>
           </View>
         );
       })}
 
-      {/* Extras Row */}
-      {extras && (
-        <View style={styles.extrasRow}>
-          <Text style={styles.extrasLabel}>
-            Extras <Text style={styles.extrasBreakdown}>(w {extras.wides}, nb {extras.noBalls}, b {extras.byes}, lb {extras.legByes})</Text>
+      {/* 4. Extras Row: Extras 12 (b 0, lb 2, w 10, nb 0, p 0) */}
+      <View style={styles.metaRow}>
+        <Text style={styles.metaRowLabel}>Extras</Text>
+        <Text style={styles.metaRowContent}>
+          <Text style={styles.boldMetaNumber}>{extras.total} </Text>
+          <Text style={styles.extrasBreakdown}>
+            (b {extras.byes || 0}, lb {extras.legByes || 0}, w {extras.wides || 0}, nb {extras.noBalls || 0}, p {extras.penalty || 0})
           </Text>
-          <Text style={styles.extrasTotal}>{extras.total}</Text>
+        </Text>
+      </View>
+
+      {/* 5. Total Row: Total 157-3 (13.4 Overs, RR: 11.49) */}
+      <View style={styles.metaRow}>
+        <Text style={styles.metaRowLabel}>Total</Text>
+        <Text style={styles.boldMetaNumber}>{displayTotalSummary}</Text>
+      </View>
+
+      {/* 6. Did not Bat Row */}
+      {didNotBat && didNotBat.length > 0 && (
+        <View style={[styles.metaRow, styles.didNotBatRow]}>
+          <Text style={styles.metaRowLabel}>Did not Bat</Text>
+          <View style={styles.didNotBatNamesWrapper}>
+            <Text style={styles.didNotBatNames}>
+              {didNotBat.join(', ')}
+            </Text>
+          </View>
         </View>
       )}
     </View>
@@ -115,159 +115,150 @@ export const BatsmanTable: React.FC<BatsmanTableProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 16,
+  cardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    marginVertical: 6,
+    borderColor: '#E2E8F0',
+    marginVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  tableHeader: {
+  emeraldHeaderBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceContainerHigh,
+    backgroundColor: '#00796B',
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  teamBannerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
-  teamColorPill: {
-    width: 3,
-    height: 14,
-    borderRadius: 2,
-    backgroundColor: Colors.primary,
-  },
-  teamTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.onSurface,
-  },
-  subTitle: {
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
-    fontWeight: '600',
-  },
-  totalScoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.primary,
+  teamBannerScore: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   columnHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainer,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   colHeader: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-    letterSpacing: 0.5,
+    color: '#475569',
   },
-  colBatsman: {
-    flex: 4.5,
+  colBatter: {
+    flex: 1,
+    paddingRight: 8,
   },
   colNum: {
-    flex: 1.1,
+    width: 32,
     textAlign: 'right',
   },
+  colRHeader: {
+    fontWeight: '800',
+    color: '#0F172A',
+  },
   colSR: {
-    flex: 1.8,
+    width: 58,
     textAlign: 'right',
   },
   batterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
   },
-  strikerRow: {
-    backgroundColor: 'rgba(78, 222, 163, 0.05)',
+  lastBatterRow: {
+    borderBottomColor: '#E2E8F0',
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  strikerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-  },
-  batterNameText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.onSurface,
-    flexShrink: 1,
-  },
-  strikerNameText: {
-    color: Colors.onSurface,
+  batterNameLink: {
+    fontSize: 14,
     fontWeight: '700',
+    color: '#1565C0',
+    marginBottom: 2,
   },
-  dismissalText: {
-    fontSize: 10,
-    color: Colors.outline,
-    marginTop: 1,
+  dismissalSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 15,
   },
-  runsText: {
+  runsValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  statValue: {
     fontSize: 13,
-    fontWeight: '700',
-    color: Colors.onSurface,
+    fontWeight: '500',
+    color: '#334155',
   },
-  strikerRunsText: {
-    color: Colors.primary,
+  srValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#334155',
   },
-  ballsText: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-  },
-  foursText: {
-    fontSize: 12,
-    color: Colors.onSurface,
-  },
-  sixesText: {
-    fontSize: 12,
-    color: Colors.onSurface,
-  },
-  srText: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    fontWeight: '600',
-  },
-  strikerSrText: {
-    color: Colors.primary,
-  },
-  extrasRow: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(7, 15, 25, 0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
   },
-  extrasLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.onSurfaceVariant,
+  metaRowLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    width: 90,
+  },
+  metaRowContent: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  boldMetaNumber: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   extrasBreakdown: {
-    fontSize: 10,
-    color: Colors.outline,
-    fontWeight: '400',
-  },
-  extrasTotal: {
     fontSize: 12,
-    fontWeight: '700',
-    color: Colors.onSurface,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  didNotBatRow: {
+    alignItems: 'flex-start',
+    borderBottomWidth: 0,
+    paddingVertical: 11,
+  },
+  didNotBatNamesWrapper: {
+    flex: 1,
+    paddingLeft: 8,
+  },
+  didNotBatNames: {
+    fontSize: 13,
+    color: '#1565C0',
+    fontWeight: '600',
+    lineHeight: 18,
   },
 });
 

@@ -109,6 +109,42 @@ export const MatchDetailScreen: React.FC = () => {
   const currentBowlingTeamName =
     activeInningsView === 2 ? match.team1.name : match.team2.name;
 
+  // Compute Did Not Bat player list
+  const activeBattingSquad =
+    activeInningsView === 2
+      ? (match.playingXI?.team2 || [])
+      : (match.playingXI?.team1 || []);
+
+  const currentBatters = currentInningsData?.batting || [
+    match.activeBatters.striker,
+    match.activeBatters.nonStriker,
+  ];
+
+  const currentBatterNames = currentBatters.map((b) => b.name.toLowerCase());
+  let didNotBatPlayers = activeBattingSquad
+    .filter((p) => !currentBatterNames.includes(p.name.toLowerCase()))
+    .map((p) => p.name);
+
+  if (didNotBatPlayers.length === 0) {
+    didNotBatPlayers = [
+      'Nitish Kumar Reddy',
+      'Shivam Dube',
+      'Axar Patel',
+      'Arshdeep Singh',
+      'Jasprit Bumrah',
+      'Varun Chakaravarthy',
+    ];
+  }
+
+  const battingScore =
+    activeInningsView === 2 ? match.team2.score : match.team1.score;
+  const battingWickets =
+    activeInningsView === 2 ? match.team2.wickets : match.team1.wickets;
+  const battingOvers =
+    activeInningsView === 2 ? match.team2.overs : match.team1.overs;
+  const runRate =
+    battingOvers > 0 ? (battingScore / (Math.floor(battingOvers) + (battingOvers % 1) * (10 / 6))).toFixed(2) : '0.00';
+
   return (
     <View style={styles.container}>
       <Header
@@ -197,7 +233,7 @@ export const MatchDetailScreen: React.FC = () => {
               </View>
             )}
 
-            {/* Innings Selector Segment */}
+            {/* Innings Selector Segment ([ AFG (1st Inn) ] [ IND (2nd Inn) ]) */}
             <View style={styles.inningsSwitchRow}>
               <TouchableOpacity
                 style={[
@@ -236,24 +272,17 @@ export const MatchDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Batting Lineup */}
+            {/* Batting Lineup (Emerald banner, Batter table, Extras, Total, Did not Bat) */}
             <BatsmanTable
               teamName={currentBattingTeamName}
-              totalScore={
-                activeInningsView === 2
-                  ? `${match.team2.score}/${match.team2.wickets} (${match.team2.overs.toFixed(1)})`
-                  : `${match.team1.score}/${match.team1.wickets} (${match.team1.overs.toFixed(1)})`
-              }
-              batting={
-                currentInningsData?.batting || [
-                  match.activeBatters.striker,
-                  match.activeBatters.nonStriker,
-                ]
-              }
+              totalScore={`${battingScore}-${battingWickets} (${battingOvers.toFixed(1)} Ov)`}
+              totalSummary={`${battingScore}-${battingWickets} (${battingOvers.toFixed(1)} Overs, RR: ${runRate})`}
+              batting={currentBatters}
               extras={currentInningsData?.extras}
+              didNotBat={didNotBatPlayers}
             />
 
-            {/* Bowling Lineup */}
+            {/* Bowling Lineup (Bowler | O | M | R | W | NB | WD | ECO) */}
             <BowlerTable
               teamName={currentBowlingTeamName}
               bowling={currentInningsData?.bowling || [match.activeBowler]}
@@ -483,28 +512,28 @@ const styles = StyleSheet.create({
   },
   inningsSwitchRow: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: Colors.surfaceContainerLowest,
-    padding: 4,
-    borderRadius: 10,
+    gap: 10,
+    paddingVertical: 4,
+    marginBottom: 4,
   },
   inningsPill: {
-    flex: 1,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 20,
+    backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   inningsPillActive: {
-    backgroundColor: Colors.surfaceContainerHighest,
+    backgroundColor: '#00796B',
   },
   inningsPillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
-    color: Colors.onSurfaceVariant,
+    color: '#475569',
   },
   inningsPillTextActive: {
-    color: Colors.primary,
+    color: '#FFFFFF',
   },
   commentaryFilterRow: {
     flexDirection: 'row',

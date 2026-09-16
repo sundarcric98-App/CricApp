@@ -46,6 +46,7 @@ export const CreateMatchScreen: React.FC = () => {
   const [customSeriesName, setCustomSeriesName] = useState('Friendly Series 2026');
 
   const [overs, setOvers] = useState<number>(20);
+  const [customOvers, setCustomOvers] = useState<string>('');
   const [venue, setVenue] = useState('Cricket Stadium');
   const [city, setCity] = useState('Chennai');
 
@@ -175,6 +176,10 @@ export const CreateMatchScreen: React.FC = () => {
       return;
     }
 
+    const effectiveOvers = (customOvers && parseInt(customOvers, 10) > 0)
+      ? parseInt(customOvers, 10)
+      : overs;
+
     setSubmitting(true);
     try {
       const teamAObj = teams.find((t) => t.id === selectedTeamAId);
@@ -192,8 +197,8 @@ export const CreateMatchScreen: React.FC = () => {
         teamBLogo: teamBObj?.logoUrl,
         tournamentId: tournamentObj?.id,
         tournamentName: tournamentObj?.name || customSeriesName || 'Friendly Series 2026',
-        matchType: `${overs} Overs Match`,
-        overs,
+        matchType: `${effectiveOvers} Overs Match`,
+        overs: effectiveOvers,
         venue: venue.trim() || 'Cricket Stadium',
         city: city.trim() || 'City',
         tossWinner,
@@ -495,22 +500,47 @@ export const CreateMatchScreen: React.FC = () => {
 
           <Text style={styles.fieldLabel}>Total Overs Per Innings</Text>
           <View style={styles.oversGrid}>
-            {OVERS_OPTIONS.map((num) => (
-              <TouchableOpacity
-                key={num}
-                style={[styles.overButton, overs === num && styles.overButtonActive]}
-                onPress={() => setOvers(num)}
-              >
-                <Text
-                  style={[
-                    styles.overButtonText,
-                    overs === num && styles.overButtonTextActive,
-                  ]}
+            {OVERS_OPTIONS.map((num) => {
+              const isSelected = !customOvers && overs === num;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  style={[styles.overButton, isSelected && styles.overButtonActive]}
+                  onPress={() => {
+                    setOvers(num);
+                    setCustomOvers('');
+                  }}
                 >
-                  {num} Overs
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.overButtonText,
+                      isSelected && styles.overButtonTextActive,
+                    ]}
+                  >
+                    {num} Overs
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Custom Overs Field */}
+          <View style={{ marginTop: 8, marginBottom: 12 }}>
+            <Text style={[styles.fieldLabel, { fontSize: 11 }]}>Or Custom Overs:</Text>
+            <TextInput
+              style={[styles.textInput, { marginTop: 4 }]}
+              placeholder="e.g. 7, 8, 12 overs"
+              placeholderTextColor={Colors.onSurfaceVariant}
+              keyboardType="numeric"
+              value={customOvers}
+              onChangeText={(val) => {
+                setCustomOvers(val);
+                const parsed = parseInt(val, 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                  setOvers(parsed);
+                }
+              }}
+            />
           </View>
 
           <View style={styles.twoColumnRow}>

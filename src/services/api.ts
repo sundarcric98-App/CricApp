@@ -22,6 +22,7 @@ import {
   User,
 } from '../types/cricket';
 import { applyBallToMatch, ballsToOvers, oversToBalls } from '../utils/cricketRules';
+import { formatDateForPostgres } from '../utils/dateUtils';
 import { generateCustomId, generatePlayerIdFromUsername } from '../utils/idGenerator';
 import supabase from './supabase';
 
@@ -636,8 +637,8 @@ export const cricketApi = {
             win_points: payload.winPoints || 2,
             tie_points: payload.tiePoints || 1,
             loss_points: payload.lossPoints || 0,
-            start_date: payload.startDate || null,
-            end_date: payload.endDate || null,
+            start_date: formatDateForPostgres(payload.startDate),
+            end_date: formatDateForPostgres(payload.endDate),
             banner_url:
               payload.bannerUrl ||
               'https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=800&auto=format&fit=crop&q=80',

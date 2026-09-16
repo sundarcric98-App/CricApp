@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Colors from '../../constants/colors';
 import { BallType } from '../../types/cricket';
 import ScoreButton from './ScoreButton';
@@ -17,6 +17,8 @@ interface ScoringKeypadProps {
   disabled?: boolean;
 }
 
+type ExtraModalType = 'noBall' | 'wide' | 'legBye' | 'bye' | null;
+
 export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
   onScoreBall,
   onUndo,
@@ -28,6 +30,28 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
   canUndo = true,
   disabled = false,
 }) => {
+  const [activeExtraModal, setActiveExtraModal] = useState<ExtraModalType>(null);
+
+  const handleSelectNoBallRuns = (batRuns: number) => {
+    setActiveExtraModal(null);
+    onScoreBall('noBall', batRuns, true);
+  };
+
+  const handleSelectWideRuns = (extraRuns: number) => {
+    setActiveExtraModal(null);
+    onScoreBall('wide', extraRuns, true);
+  };
+
+  const handleSelectByeRuns = (runs: number) => {
+    setActiveExtraModal(null);
+    onScoreBall('bye', runs, true);
+  };
+
+  const handleSelectLegByeRuns = (runs: number) => {
+    setActiveExtraModal(null);
+    onScoreBall('legBye', runs, true);
+  };
+
   return (
     <View style={styles.keypadContainer}>
       {/* Action Utility Bar: Swap Strike, End Over, Retire, New Batsman */}
@@ -158,36 +182,36 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
         <View style={styles.buttonCell}>
           <ScoreButton
             label="WD"
-            subLabel="Wide (+1)"
+            subLabel="Wide"
             variant="extra"
-            onPress={() => onScoreBall('wide', 1, true)}
+            onPress={() => setActiveExtraModal('wide')}
             disabled={disabled}
           />
         </View>
         <View style={styles.buttonCell}>
           <ScoreButton
             label="NB"
-            subLabel="No Ball (+1)"
+            subLabel="No Ball"
             variant="extra"
-            onPress={() => onScoreBall('noBall', 1, true)}
+            onPress={() => setActiveExtraModal('noBall')}
             disabled={disabled}
           />
         </View>
         <View style={styles.buttonCell}>
           <ScoreButton
             label="LB"
-            subLabel="Leg Bye (+1)"
+            subLabel="Leg Bye"
             variant="action"
-            onPress={() => onScoreBall('legBye', 1, true)}
+            onPress={() => setActiveExtraModal('legBye')}
             disabled={disabled}
           />
         </View>
         <View style={styles.buttonCell}>
           <ScoreButton
             label="BYE"
-            subLabel="Bye (+1)"
+            subLabel="Bye"
             variant="action"
-            onPress={() => onScoreBall('bye', 1, true)}
+            onPress={() => setActiveExtraModal('bye')}
             disabled={disabled}
           />
         </View>
@@ -205,6 +229,166 @@ export const ScoringKeypad: React.FC<ScoringKeypadProps> = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Extras Selection Modal */}
+      <Modal
+        visible={activeExtraModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveExtraModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.extraModalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>
+                {activeExtraModal === 'noBall'
+                  ? 'NO BALL - Runs Off Bat'
+                  : activeExtraModal === 'wide'
+                  ? 'WIDE DELIVERY - Extra Runs'
+                  : activeExtraModal === 'legBye'
+                  ? 'LEG BYE - Runs Scored'
+                  : 'BYE - Runs Scored'}
+              </Text>
+              <TouchableOpacity onPress={() => setActiveExtraModal(null)}>
+                <Ionicons name="close-circle" size={24} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            {/* No Ball Options */}
+            {activeExtraModal === 'noBall' && (
+              <View style={styles.extraGrid}>
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectNoBallRuns(0)}
+                >
+                  <Text style={styles.extraOptionNumber}>0</Text>
+                  <Text style={styles.extraOptionSub}>NB (1 run total)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectNoBallRuns(1)}
+                >
+                  <Text style={styles.extraOptionNumber}>1</Text>
+                  <Text style={styles.extraOptionSub}>NB + 1 run (2 total)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectNoBallRuns(2)}
+                >
+                  <Text style={styles.extraOptionNumber}>2</Text>
+                  <Text style={styles.extraOptionSub}>NB + 2 runs (3 total)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectNoBallRuns(3)}
+                >
+                  <Text style={styles.extraOptionNumber}>3</Text>
+                  <Text style={styles.extraOptionSub}>NB + 3 runs (4 total)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.extraOptionBtn, styles.extraOptionHighlight]}
+                  onPress={() => handleSelectNoBallRuns(4)}
+                >
+                  <Text style={[styles.extraOptionNumber, { color: '#4EDEAF' }]}>4</Text>
+                  <Text style={[styles.extraOptionSub, { color: '#4EDEAF' }]}>
+                    NB + FOUR (5 total)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.extraOptionBtn, styles.extraOptionHighlight]}
+                  onPress={() => handleSelectNoBallRuns(6)}
+                >
+                  <Text style={[styles.extraOptionNumber, { color: '#FFB95F' }]}>6</Text>
+                  <Text style={[styles.extraOptionSub, { color: '#FFB95F' }]}>
+                    NB + SIX (7 total)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Wide Options */}
+            {activeExtraModal === 'wide' && (
+              <View style={styles.extraGrid}>
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectWideRuns(1)}
+                >
+                  <Text style={styles.extraOptionNumber}>1</Text>
+                  <Text style={styles.extraOptionSub}>Standard Wide (1 run)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectWideRuns(2)}
+                >
+                  <Text style={styles.extraOptionNumber}>2</Text>
+                  <Text style={styles.extraOptionSub}>Wide + 1 Bye (2 runs)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.extraOptionBtn}
+                  onPress={() => handleSelectWideRuns(3)}
+                >
+                  <Text style={styles.extraOptionNumber}>3</Text>
+                  <Text style={styles.extraOptionSub}>Wide + 2 Byes (3 runs)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.extraOptionBtn, styles.extraOptionHighlight]}
+                  onPress={() => handleSelectWideRuns(5)}
+                >
+                  <Text style={[styles.extraOptionNumber, { color: '#4EDEAF' }]}>5</Text>
+                  <Text style={[styles.extraOptionSub, { color: '#4EDEAF' }]}>
+                    Wide + 4 Byes (5 runs)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Leg-Bye Options */}
+            {activeExtraModal === 'legBye' && (
+              <View style={styles.extraGrid}>
+                {[1, 2, 3, 4].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={styles.extraOptionBtn}
+                    onPress={() => handleSelectLegByeRuns(num)}
+                  >
+                    <Text style={styles.extraOptionNumber}>{num}</Text>
+                    <Text style={styles.extraOptionSub}>
+                      {num} {num === 1 ? 'Leg-Bye' : 'Leg-Byes'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Bye Options */}
+            {activeExtraModal === 'bye' && (
+              <View style={styles.extraGrid}>
+                {[1, 2, 3, 4].map((num) => (
+                  <TouchableOpacity
+                    key={num}
+                    style={styles.extraOptionBtn}
+                    onPress={() => handleSelectByeRuns(num)}
+                  >
+                    <Text style={styles.extraOptionNumber}>{num}</Text>
+                    <Text style={styles.extraOptionSub}>
+                      {num} {num === 1 ? 'Bye' : 'Byes'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -262,6 +446,68 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  extraModalContent: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  extraGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  extraOptionBtn: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  extraOptionHighlight: {
+    borderColor: 'rgba(78, 222, 163, 0.4)',
+    backgroundColor: 'rgba(78, 222, 163, 0.08)',
+  },
+  extraOptionNumber: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  extraOptionSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+    marginTop: 3,
+    textAlign: 'center',
   },
 });
 
